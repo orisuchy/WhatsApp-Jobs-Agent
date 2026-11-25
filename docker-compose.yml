@@ -1,0 +1,22 @@
+services:
+  python-backend:
+    build: ./python_service
+    environment:
+      - OLLAMA_URL=http://host.docker.internal:11434
+      - OLLAMA_MODEL=gemma4:12b
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  node-whatsapp:
+    build: ./node_service
+    depends_on:
+      - python-backend
+    volumes:
+      - whatsapp_session:/app/.wwebjs_auth
+    restart: unless-stopped
+
+volumes:
+  whatsapp_session:

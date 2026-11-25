@@ -1,0 +1,17 @@
+node_modules/
+.wwebjs_auth/
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+.DS_Store
+
+# Personal data — never commit
+.env
+python_service/files/
+
+# Local tooling
+.idea/
+.junie/
+.superpowers/
+.claude/settings.local.json

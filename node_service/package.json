@@ -1,0 +1,16 @@
+{
+  "name": "job-agent-whatsapp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WhatsApp client that forwards matched job postings to a target group",
+  "main": "whatsapp-agent.js",
+  "scripts": {
+    "start": "node whatsapp-agent.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "whatsapp-web.js": "^1.26.0",
+    "qrcode-terminal": "^0.12.0",
+    "axios": "^1.7.7"
+  }
+}

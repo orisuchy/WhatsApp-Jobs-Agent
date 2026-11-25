@@ -233,3 +233,12 @@ test('near-simultaneous postings are analysed one at a time and both delivered',
   assert.equal(maxActive, 1);
   assert.equal(sentMessages.length, 2);
 });
+
+test('clientOptions pins WhatsApp Web only when WWEBJS_WEB_VERSION is set', () => {
+  const { clientOptions } = require('./whatsapp-agent');
+  assert.equal(clientOptions('').webVersionCache, undefined);
+  const o = clientOptions('2.3000.1');
+  assert.equal(o.webVersion, '2.3000.1');
+  assert.equal(o.webVersionCache.type, 'remote');
+  assert.match(o.webVersionCache.remotePath, /wa-version\/main\/html\/2\.3000\.1\.html$/);
+});

@@ -172,14 +172,28 @@ async function processSingleResult(client, result, message) {
   await client.sendMessage(targetGroupId, result.whatsapp_text);
 }
 
-function createClient() {
-  return new Client({
+// WWEBJS_WEB_VERSION pins WhatsApp Web to a known-good build (archived by wppconnect-team/wa-version),
+// for when a new WhatsApp Web release breaks whatsapp-web.js. Unset = library default.
+function clientOptions(webVersion = process.env.WWEBJS_WEB_VERSION) {
+  const opts = {
     authStrategy: new LocalAuth(),
     puppeteer: {
       executablePath: '/usr/bin/chromium',
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
     },
-  });
+  };
+  if (webVersion) {
+    opts.webVersion = webVersion;
+    opts.webVersionCache = {
+      type: 'remote',
+      remotePath: `https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/${webVersion}.html`,
+    };
+  }
+  return opts;
+}
+
+function createClient() {
+  return new Client(clientOptions());
 }
 
 async function listGroups(client) {
@@ -240,6 +254,7 @@ module.exports = {
   resetConfigCache: () => { configCache = { at: 0, value: null, ttl: CONFIG_TTL_MS }; },
   pushState,
   registerStateEvents,
+  clientOptions,
 };
 
 if (require.main === module) {

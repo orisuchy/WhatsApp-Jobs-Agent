@@ -217,6 +217,11 @@ Everything stays on your machine except what you send out:
   If the session is stale, `docker compose down -v` removes the `whatsapp_session` volume (you re-scan).
 - **Chromium "profile in use" / SingletonLock error:** the container deletes stale locks on start, so
   `docker compose restart node-whatsapp` is usually enough; if it persists, remove the `whatsapp_session` volume.
+- **"Failed to initialize client: Cannot read properties of null (reading 'Socket')" (or similar):** a
+  WhatsApp Web update broke whatsapp-web.js. Rebuild to pick up a newer library (`docker compose up --build`);
+  if that doesn't help, pin a known-good build with `WWEBJS_WEB_VERSION=<version>` in `.env` (pick one from
+  [wa-version](https://github.com/wppconnect-team/wa-version/tree/main/html), file name without `.html`) and
+  `docker compose up -d node-whatsapp`.
 - **Ollama unreachable:** make sure `ollama serve` is running on the host and the model is pulled.
   Inside Docker the URL is `http://host.docker.internal:11434`; on Linux Ollama must listen on
   an address the container can reach (`OLLAMA_HOST=0.0.0.0`).

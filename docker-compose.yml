@@ -2,9 +2,6 @@ services:
   python-backend:
     build: ./python_service
     env_file: .env
-    environment:
-      - OLLAMA_URL=http://host.docker.internal:11434
-      - OLLAMA_MODEL=gemma4:12b
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

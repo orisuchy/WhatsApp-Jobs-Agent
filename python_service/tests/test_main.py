@@ -11,13 +11,13 @@ import main
 GOOD = {"odds": "80%", "reason": "התאמה טובה", "company": "Acme", "summary": "מפתח/ת Python"}
 
 
-def _mock_ollama(monkeypatch, content=None, error=None):
+def _mock_llm(monkeypatch, content=None, error=None):
     client = MagicMock()
     if error:
-        client.chat.side_effect = error
+        client.complete.side_effect = error
     else:
-        client.chat.return_value = {"message": {"content": json.dumps(content or GOOD)}}
-    monkeypatch.setattr(main, "ollama_client", client)
+        client.complete.return_value = json.dumps(content or GOOD)
+    monkeypatch.setattr(main, "llm_client", client)
     return client
 
 
@@ -28,7 +28,7 @@ def _analyze(c, text="Python developer wanted"):
 def test_analyze_returns_result_synchronously(monkeypatch):
     with TestClient(main.app) as c:
         monkeypatch.setattr(main, "CV_TEXT", "Python")
-        _mock_ollama(monkeypatch)
+        _mock_llm(monkeypatch)
         body = _analyze(c).json()
 
     assert body == GOOD
@@ -42,20 +42,20 @@ def test_batch_endpoints_are_gone():
 def test_concurrent_requests_are_serialised_and_get_own_result(monkeypatch):
     active = {"now": 0, "max": 0}
 
-    def chat(**kwargs):
+    def complete(messages, **kwargs):
         active["now"] += 1
         active["max"] = max(active["max"], active["now"])
         time.sleep(0.05)
         active["now"] -= 1
-        text = kwargs["messages"][1]["content"]
+        text = messages[1]["content"]
         company = "A" if "posting-A" in text else "B"
-        return {"message": {"content": json.dumps({**GOOD, "company": company})}}
+        return json.dumps({**GOOD, "company": company})
 
     client = MagicMock()
-    client.chat.side_effect = chat
+    client.complete.side_effect = complete
     with TestClient(main.app) as c:
         monkeypatch.setattr(main, "CV_TEXT", "Python")
-        monkeypatch.setattr(main, "ollama_client", client)
+        monkeypatch.setattr(main, "llm_client", client)
         with ThreadPoolExecutor(4) as pool:
             results = list(pool.map(lambda t: _analyze(c, t).json()["company"], ["posting-A", "posting-B"] * 2))
 
@@ -66,7 +66,7 @@ def test_concurrent_requests_are_serialised_and_get_own_result(monkeypatch):
 def test_failure_yields_zero_odds(monkeypatch):
     with TestClient(main.app) as c:
         monkeypatch.setattr(main, "CV_TEXT", "Python")
-        _mock_ollama(monkeypatch, error=RuntimeError("boom"))
+        _mock_llm(monkeypatch, error=RuntimeError("boom"))
         response = _analyze(c)
 
     assert response.status_code == 200
@@ -87,8 +87,8 @@ def test_analyze_includes_fetched_job_description(monkeypatch):
         monkeypatch.setattr(
             main, "fetch_url_text", lambda url, timeout=30: ("תיאור משרה מלא מהקישור", None)
         )
-        client = _mock_ollama(monkeypatch)
+        client = _mock_llm(monkeypatch)
         _analyze(c, "דרוש מפתח Python https://example.com/jobs/123")
 
-    sent = client.chat.call_args[1]["messages"][1]["content"]
+    sent = client.complete.call_args[0][0][1]["content"]
     assert "תיאור משרה מלא מהקישור" in sent

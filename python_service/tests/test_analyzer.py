@@ -6,7 +6,7 @@ from main import analyze_job_posting, JobMatchingResult
 
 def _mock_client(content: str) -> MagicMock:
     client = MagicMock()
-    client.chat.return_value = {"message": {"content": content}}
+    client.complete.return_value = content
     return client
 
 
@@ -21,7 +21,7 @@ def test_analyze_job_posting_returns_match():
     )
     client = _mock_client(payload)
     result = analyze_job_posting(
-        "Python developer at Acme", "no fetched data", "Python, FastAPI experience", client, "llama3.1"
+        "Python developer at Acme", "no fetched data", "Python, FastAPI experience", client
     )
     assert result["odds"] == "90%"
     assert result["company"] == "Acme"
@@ -35,7 +35,7 @@ def test_analyze_job_posting_returns_no_match():
     )
     client = _mock_client(payload)
     result = analyze_job_posting(
-        "Chef needed", "no fetched data", "Python, FastAPI experience", client, "llama3.1"
+        "Chef needed", "no fetched data", "Python, FastAPI experience", client
     )
     assert result["odds"] == "5%"
 
@@ -43,29 +43,28 @@ def test_analyze_job_posting_returns_no_match():
 def test_analyze_job_posting_malformed_json_falls_back():
     client = _mock_client("not valid json")
     result = analyze_job_posting(
-        "Python developer", "no fetched data", "Python experience", client, "llama3.1"
+        "Python developer", "no fetched data", "Python experience", client
     )
     assert result == {"odds": 0}
 
 
 def test_analyze_job_posting_client_raises_falls_back():
     client = MagicMock()
-    client.chat.side_effect = RuntimeError("ollama unreachable")
+    client.complete.side_effect = RuntimeError("ollama unreachable")
     result = analyze_job_posting(
-        "Python developer", "no fetched data", "Python experience", client, "llama3.1"
+        "Python developer", "no fetched data", "Python experience", client
     )
     assert result == {"odds": 0}
 
 
-def test_analyze_job_posting_calls_chat_with_json_format():
+def test_analyze_job_posting_calls_complete_with_schema():
     payload = json.dumps(
         {"odds": "5%", "reason": "אין התאמה", "company": "N/A", "summary": ""}
     )
     client = _mock_client(payload)
-    analyze_job_posting("posting", "no fetched data", "cv text", client, "llama3.1")
-    _, kwargs = client.chat.call_args
-    assert kwargs["format"] == JobMatchingResult.model_json_schema()
-    assert kwargs["model"] == "llama3.1"
+    analyze_job_posting("posting", "no fetched data", "cv text", client)
+    _, kwargs = client.complete.call_args
+    assert kwargs["schema"] == JobMatchingResult.model_json_schema()
 
 
 def test_analyze_job_posting_uses_preextracted_company():
@@ -74,7 +73,7 @@ def test_analyze_job_posting_uses_preextracted_company():
     )
     client = _mock_client(payload)
     result = analyze_job_posting(
-        "posting", "no fetched data", "cv text", client, "llama3.1", company_name="CodeValue"
+        "posting", "no fetched data", "cv text", client, company_name="CodeValue"
     )
     assert result["company"] == "CodeValue"
-    assert "IMPORTANT: The hiring company name is: CodeValue" in client.chat.call_args[1]["messages"][1]["content"]
+    assert "IMPORTANT: The hiring company name is: CodeValue" in client.complete.call_args[0][0][1]["content"]

@@ -1,4 +1,3 @@
-import json
 import os
 import re
 import ipaddress
@@ -9,11 +8,11 @@ from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 from fastapi import FastAPI
-from ollama import Client
 from pydantic import BaseModel, Field
 from pypdf import PdfReader
 import requests
 
+from llm import complete_json, load_llm_client
 from prompts import JOB_MATCHING_ASSISTANT, CV_ORGANIZER
 from logger import setup_logger
 
@@ -97,7 +96,7 @@ def extract_fetched_data(original_text: str) -> tuple[str, str | None]:
     return fetched, company_name
 
 
-def analyze_job_posting(posting_text: str, fetched_data: str, cv_text: str, client, model: str, company_name: str | None = None) -> dict:
+def analyze_job_posting(posting_text: str, fetched_data: str, cv_text: str, client, company_name: str | None = None) -> dict:
     try:
         logger.info("Analyzing job posting: %s", posting_text)
 
@@ -107,10 +106,9 @@ def analyze_job_posting(posting_text: str, fetched_data: str, cv_text: str, clie
         else:
             company_instruction = "\n\nFor the 'company' field: Extract the company name from the <fetched_data> section. If not found there, extract it from the <job_posting> section. If completely unknown, write 'Unknown'."
 
-        response = client.chat(
-            model=model,
-            format=JobMatchingResult.model_json_schema(),
-            messages=[
+        result = complete_json(
+            client,
+            [
                 {"role": "system", "content": JOB_MATCHING_ASSISTANT},
                 {
                     "role": "user",
@@ -133,30 +131,20 @@ def analyze_job_posting(posting_text: str, fetched_data: str, cv_text: str, clie
                         Provide your assessment in the exact JSON format specified in your system instructions.""",
                 },
             ],
-            options={"temperature": 0.0,
-                     "num_ctx": 16384},
-            keep_alive="1m"
+            JobMatchingResult,
+            keep_alive="1m",
+            override={"company": company_name} if company_name else None,
         )
-
-        content_str = response["message"]["content"]
-        result_dict = json.loads(content_str)
-
-        if company_name:
-            result_dict["company"] = company_name
-
-        validated_result = JobMatchingResult(**result_dict)
-        return validated_result.model_dump()
+        return result or {"odds": 0}
     except Exception:
         logger.exception("analyze_job_posting failed")
         return {"odds": 0}
 
 
 CV_PATH = os.path.join(os.path.dirname(__file__), "files", "my_cv.pdf")
-OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "gemma4:e2b")
 
 CV_TEXT = ""
-ollama_client = Client(host=OLLAMA_URL)
+llm_client = load_llm_client()
 
 llm_lock = Lock()  # one LLM call at a time
 
@@ -165,12 +153,11 @@ class JobPosting(BaseModel):
     text: str
 
 
-def clean_cv(raw_cv_text, client, model: str):
+def clean_cv(raw_cv_text, client):
     try:
         logger.info("Cleaning CV text (%d chars)", len(raw_cv_text))
-        response = client.chat(
-            model=model,
-            messages=[
+        return client.complete(
+            [
                 {"role": "system", "content": CV_ORGANIZER},
                 {
                     "role": "user",
@@ -183,11 +170,8 @@ def clean_cv(raw_cv_text, client, model: str):
                         """,
                 },
             ],
-            options={"temperature": 0.0,
-                     "num_ctx": 16384},
-            keep_alive=0
+            keep_alive=0,
         )
-        return response["message"]["content"]
     except Exception:
         logger.exception("Failed to clean CV text, returning raw text")
         return raw_cv_text
@@ -203,7 +187,7 @@ def load_cv() -> None:
     try:
         raw_cv_text = extract_cv_text(CV_PATH)
         logger.info("Loaded raw CV text (%d chars) from %s", len(raw_cv_text), CV_PATH)
-        CV_TEXT = clean_cv(raw_cv_text, ollama_client, OLLAMA_MODEL)
+        CV_TEXT = clean_cv(raw_cv_text, llm_client)
         logger.info("Cleaned raw CV text (%d chars)", len(CV_TEXT))
     except Exception:
         logger.exception("Failed to load CV from %s", CV_PATH)
@@ -223,4 +207,4 @@ app = FastAPI(lifespan=lifespan)
 def analyze(posting: JobPosting) -> dict:
     fetched_data, company_name = extract_fetched_data(posting.text)
     with llm_lock:
-        return analyze_job_posting(posting.text, fetched_data, CV_TEXT, ollama_client, OLLAMA_MODEL, company_name)
+        return analyze_job_posting(posting.text, fetched_data, CV_TEXT, llm_client, company_name)

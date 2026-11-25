@@ -5,7 +5,7 @@ import ipaddress
 import socket
 from contextlib import asynccontextmanager
 from threading import Lock
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
 from typing import Literal
@@ -61,6 +61,9 @@ def extract_first_url(text: str):
     return match.group(0) if match else None
 
 
+MAX_REDIRECTS = 5
+
+
 def assert_safe_url(url: str) -> None:
     """Refuse non-http(s) URLs and hosts resolving to non-public addresses."""
     parsed = urlparse(url)
@@ -75,8 +78,15 @@ def assert_safe_url(url: str) -> None:
 def fetch_url_text(url: str, timeout: int = 30) -> tuple[str, str | None]:
     # Standard HTTP fetch with BeautifulSoup
     try:
-        assert_safe_url(url)
-        response = requests.get(url, timeout=timeout, allow_redirects=False, headers={"User-Agent": "Mozilla/5.0"})
+        # Follow redirects by hand so every hop passes the safe-URL check.
+        for _ in range(MAX_REDIRECTS + 1):
+            assert_safe_url(url)
+            response = requests.get(url, timeout=timeout, allow_redirects=False, headers={"User-Agent": "Mozilla/5.0"})
+            if not response.is_redirect:
+                break
+            url = urljoin(url, response.headers["Location"])
+        else:
+            raise ValueError(f"Too many redirects (>{MAX_REDIRECTS})")
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
 

@@ -60,3 +60,43 @@ def test_fetch_url_text_refuses_unsafe_urls(url, monkeypatch):
 
 def test_extract_fetched_data_treats_refused_url_as_failed_fetch():
     assert extract_fetched_data("דרוש http://127.0.0.1/secret") == ("no fetched data", None)
+
+
+class _Resp:
+    def __init__(self, location=None, text="<p>job</p>"):
+        self.headers = {"Location": location} if location else {}
+        self.is_redirect = bool(location)
+        self.text = text
+
+    def raise_for_status(self):
+        pass
+
+
+def _stub_hosts(monkeypatch, pages):
+    monkeypatch.setattr(main, "assert_safe_url", lambda u: (_ for _ in ()).throw(ValueError(u)) if "internal" in u else None)
+    monkeypatch.setattr(main.requests, "get", lambda u, **k: pages[u])
+
+
+def test_fetch_follows_redirect_chain(monkeypatch):
+    _stub_hosts(monkeypatch, {"http://s.co/a": _Resp("https://example.com/job"), "https://example.com/job": _Resp()})
+    assert main.fetch_url_text("http://s.co/a")[0] == "job"
+
+
+def test_fetch_refuses_redirect_to_private_hop(monkeypatch):
+    _stub_hosts(monkeypatch, {"http://s.co/a": _Resp("http://internal/x")})
+    with pytest.raises(ValueError):
+        main.fetch_url_text("http://s.co/a")
+
+
+def test_fetch_stops_after_five_redirects(monkeypatch):
+    calls = []
+
+    def get(u, **k):
+        calls.append(u)
+        return _Resp("http://s.co/loop")
+
+    monkeypatch.setattr(main, "assert_safe_url", lambda u: None)
+    monkeypatch.setattr(main.requests, "get", get)
+    with pytest.raises(ValueError):
+        main.fetch_url_text("http://s.co/loop")
+    assert len(calls) == 6

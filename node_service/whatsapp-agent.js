@@ -125,6 +125,8 @@ function registerStateEvents(client) {
   client.on('disconnected', () => pushState({ status: 'disconnected', qr: null }));
 }
 
+let analyzeQueue = Promise.resolve();
+
 async function handleIncomingMessage(client, message) {
   if (!isFromSourceGroup(message.from, (await getConfig()).sourceGroupIds)) {
     log_info(`Ignoring message from ${message.from} (not in source group)`);
@@ -142,8 +144,13 @@ async function handleIncomingMessage(client, message) {
     } catch (err) {
       log_error('Could not read group name: ' + err.message);
     }
-    const { data } = await axios.post(ANALYZE_URL, { text: message.body, group }, { timeout: ANALYZE_TIMEOUT_MS });
-    await processSingleResult(client, data, message);
+    // One posting at a time so the timeout only measures its own analysis (Python serialises on the LLM anyway).
+    const run = analyzeQueue.then(async () => {
+      const { data } = await axios.post(ANALYZE_URL, { text: message.body, group }, { timeout: ANALYZE_TIMEOUT_MS });
+      await processSingleResult(client, data, message);
+    });
+    analyzeQueue = run.catch(() => {});
+    await run;
 
   } catch (err) {
     if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {

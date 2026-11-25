@@ -214,3 +214,22 @@ test('getConfig fetches Python config, caches it, and picks up changes after the
   assert.deepEqual((await getConfig()).sourceGroupIds, ['new2@g.us']); // TTL expired
   resetConfigCache();
 });
+
+test('near-simultaneous postings are analysed one at a time and both delivered', async (t) => {
+  let active = 0, maxActive = 0;
+  t.mock.method(axios, 'post', async (url, body) => {
+    active++; maxActive = Math.max(maxActive, active);
+    await new Promise((r) => setTimeout(r, 20));
+    active--;
+    return { data: { forward: true, whatsapp_text: `msg ${body.text}` } };
+  });
+  const sentMessages = [];
+  const fakeClient = { sendMessage: async (to, text) => sentMessages.push({ to, text }) };
+
+  await Promise.all(['דרוש מפתח ONE', 'דרוש מפתח TWO'].map((body) =>
+    handleIncomingMessage(fakeClient, { from: firstSourceGroupId, body })
+  ));
+
+  assert.equal(maxActive, 1);
+  assert.equal(sentMessages.length, 2);
+});

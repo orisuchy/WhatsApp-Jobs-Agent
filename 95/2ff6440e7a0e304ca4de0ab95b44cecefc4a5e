@@ -1,0 +1,32 @@
+python_service/tests/test_main.py
+  s_d22abba6d18c2e::t_191575a478fa1c 2-3,24-28,31-32,34,37,39-40,42-43,45-52,54-55,57-63,70,73,84,91
+python_service/tests/test_url_fetcher.py
+  s_d22abba6d18c2e::t_191575a478fa1c 1-2,37-62
+node_service/whatsapp-agent.js
+  s_d22abba6d18c2e::t_12f59230c6bb42 92-93,117,126-129
+node_service/whatsapp-agent.test.js
+  s_d22abba6d18c2e::t_12f59230c6bb42 185-214
+python_service/main.py
+  s_d22abba6d18c2e::t_9165e95ddc20cf 4-6,8,161,213-216,219,225-226
+  s_d22abba6d18c2e::t_191575a478fa1c 224
+  s_d22abba6d18c2e::t_f25751ee964209 43-53,57
+  s_d22abba6d18c2e::t_33f0873adfdf4a 58
+.env.example
+  s_d22abba6d18c2e::t_cd9ded9adc846e 8-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "952ff6440e7a0e304ca4de0ab95b44cecefc4a5e",
+  "prompts": {},
+  "sessions": {
+    "s_d22abba6d18c2e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7ee1d99b-b3b5-4238-8ffc-d7d7434c748c",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "ori.suchy <ori.suchy@coro.net>"
+    }
+  }
+}

@@ -281,18 +281,24 @@ def test_sheets_missing_config_or_key_file_is_skipped(monkeypatch, sheets_env, c
     assert "GOOGLE_SHEET_ID" in outputs.missing_config("sheets")
 
 
-def test_sheets_selects_tab_and_uses_service_account(monkeypatch, sheets_env):
-    import sys, types
-    calls = {}
+def test_sheets_selects_tab_and_uses_service_account(monkeypatch, tmp_path):
+    import sys
+    import types
+
     ws = FakeWorksheet()
     book = MagicMock()
-    book.worksheet.side_effect = lambda t: (calls.setdefault("tab", t), ws)[1]
-    fake = types.SimpleNamespace(service_account=lambda filename: MagicMock(open_by_key=lambda k: (calls.setdefault("key", k), book)[1]))
-    monkeypatch.setitem(sys.modules, "gspread", fake)
-    monkeypatch.undo()  # drop the _open_worksheet stub; env is re-set below
-    monkeypatch.setitem(sys.modules, "gspread", fake)
-    monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_FILE", "x")
+    book.worksheet.return_value = ws
+    service_account = MagicMock()
+    service_account.return_value.open_by_key.return_value = book
+    monkeypatch.setitem(sys.modules, "gspread", types.SimpleNamespace(service_account=service_account))
+    monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_FILE", "/data/sa.json")
     monkeypatch.setenv("GOOGLE_SHEET_ID", "sheet-9")
     monkeypatch.setenv("GOOGLE_SHEET_TAB", "Matches")
+
     assert outputs._open_worksheet() is ws
-    assert calls == {"key": "sheet-9", "tab": "Matches"}
+    service_account.assert_called_once_with(filename="/data/sa.json")
+    service_account.return_value.open_by_key.assert_called_once_with("sheet-9")
+    book.worksheet.assert_called_once_with("Matches")
+
+    monkeypatch.delenv("GOOGLE_SHEET_TAB")
+    assert outputs._open_worksheet() is book.sheet1

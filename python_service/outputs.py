@@ -176,7 +176,7 @@ def sheets_output(job: dict) -> None:
     ws.append_row(row, value_input_option="RAW")  # RAW: posting text starting with "=" must not become a formula
 
 
-DESTINATIONS = {"file": file_output, "telegram": telegram_output, "email": email_output, "sheets": sheets_output}  # later tickets add destinations here
+DESTINATIONS = {"file": file_output, "telegram": telegram_output, "email": email_output, "sheets": sheets_output}
 
 
 def dispatch(job: dict) -> None:

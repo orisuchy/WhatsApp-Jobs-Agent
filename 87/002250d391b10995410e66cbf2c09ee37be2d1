@@ -1,0 +1,31 @@
+python_service/outputs.py
+  s_60f2d4adc06e22::t_869c3bbb4004e8 6-7,9,12-13,21-28,47,55-66,74-75,79,81-83,90-95,130-157
+python_service/main.py
+  s_60f2d4adc06e22::t_feab3a2aba4362 273
+README.md
+  s_60f2d4adc06e22::t_3674b630c2364c 51-54,73-102
+  s_60f2d4adc06e22::t_4d07c597d22d1f 103
+python_service/tests/test_outputs.py
+  s_60f2d4adc06e22::t_753a1c8108d1c4 1-140,142-203,206-209
+  s_60f2d4adc06e22::t_8f9d20ebc4e24b 141
+  s_60f2d4adc06e22::t_d605deeca56e60 204-205
+.env.example
+  s_60f2d4adc06e22::t_3674b630c2364c 9-10,15-27
+  s_60f2d4adc06e22::t_7929b7517c999c 28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "87002250d391b10995410e66cbf2c09ee37be2d1",
+  "prompts": {},
+  "sessions": {
+    "s_60f2d4adc06e22": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4b55d941-b64a-43a8-8592-85446b0516b3",
+        "model": "claude-haiku-5-5"
+      },
+      "human_author": "ori.suchy <ori.suchy@coro.net>"
+    }
+  }
+}

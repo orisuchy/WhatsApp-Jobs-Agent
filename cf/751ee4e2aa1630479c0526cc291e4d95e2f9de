@@ -1,0 +1,61 @@
+.gitignore
+  s_f0b3d055912f99::t_c00a4c3c651f92 1-17
+node_service/whatsapp-agent.js
+  s_f0b3d055912f99::t_4a6b30bb1629f9 1-219
+README.md
+  s_f0b3d055912f99::t_354b869faa50d0 1-46
+docker-compose.yml
+  s_f0b3d055912f99::t_28f8ee5b6acb04 1-22
+node_service/.dockerignore
+  s_f0b3d055912f99::t_de2c8bbf8a6e21 1-3
+node_service/Dockerfile
+  s_f0b3d055912f99::t_ddb1f8009c4b97 1-16
+node_service/logger.js
+  s_f0b3d055912f99::t_c819947a87aac7 1-23
+node_service/package-lock.json
+  s_f0b3d055912f99::t_76515c91e487ea 1-2650
+node_service/package.json
+  s_f0b3d055912f99::t_28d7de410b3ea0 1-16
+node_service/whatsapp-agent.test.js
+  s_f0b3d055912f99::t_3861fb2dc7b63f 1-173
+python_service/.dockerignore
+  s_f0b3d055912f99::t_804a143f621cf5 1-7
+python_service/Dockerfile
+  s_f0b3d055912f99::t_0b8a61a6956b19 1-10
+python_service/logger.py
+  s_f0b3d055912f99::t_63903413110bfa 1-11
+python_service/main.py
+  s_f0b3d055912f99::t_22c6c077eaefe3 1-270
+python_service/prompts.py
+  s_f0b3d055912f99::t_5c990791e21371 1-78
+python_service/pytest.ini
+  s_f0b3d055912f99::t_0c555cdb292032 1-3
+python_service/requirements-dev.txt
+  s_f0b3d055912f99::t_4c5dc5d7136fa4 1-3
+python_service/requirements.txt
+  s_f0b3d055912f99::t_250c1e3d980e3c 1-7
+python_service/tests/test_analyzer.py
+  s_f0b3d055912f99::t_42bca1fe52fa04 1-80
+python_service/tests/test_cv_extractor.py
+  s_f0b3d055912f99::t_75171780e207e1 1-19
+python_service/tests/test_main.py
+  s_f0b3d055912f99::t_ea0732dc4ea13d 1-76
+python_service/tests/test_url_fetcher.py
+  s_f0b3d055912f99::t_576e43c49f79b5 1-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cf751ee4e2aa1630479c0526cc291e4d95e2f9de",
+  "prompts": {},
+  "sessions": {
+    "s_f0b3d055912f99": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0ae6c7fd-7e45-4536-ba8e-74fd39250ca1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "ori.suchy <ori.suchy@coro.net>"
+    }
+  }
+}

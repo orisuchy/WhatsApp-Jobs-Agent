@@ -207,3 +207,20 @@ def test_failing_telegram_does_not_stop_email_through_analyze(
 
     assert body["forward"] is True and "whatsapp_text" in body
     assert any(call[0] == "send" for call in smtp[0].calls)
+
+
+def test_failing_email_does_not_stop_telegram_through_analyze(
+    tmp_path, monkeypatch, telegram_env, email_env, posts, smtp
+):
+    monkeypatch.setenv("OUTPUTS", "whatsapp,telegram,email")
+    monkeypatch.setattr(outputs.smtplib, "SMTP", MagicMock(side_effect=OSError("smtp down")))
+    client = MagicMock()
+    client.complete.return_value = json.dumps(GOOD)
+    monkeypatch.setattr(main, "llm_client", client)
+
+    with TestClient(main.app) as c:  # startup (lifespan) reloads the profile, so patch after it
+        monkeypatch.setattr(main, "CV_TEXT", "Python")
+        body = c.post("/analyze", json={"text": "Python dev at Acme", "group": "G1"}).json()
+
+    assert body["forward"] is True
+    assert len(posts.calls) == 1

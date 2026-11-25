@@ -1,0 +1,33 @@
+python_service/static/index.html
+  s_43369e3ca13536::t_bfb7bdbcd8c4c9 1-56
+python_service/tests/test_main.py
+  s_43369e3ca13536::t_bfb7bdbcd8c4c9 251-269
+node_service/whatsapp-agent.js
+  s_43369e3ca13536::t_66446a817d83c2 79-108,168,213-214
+node_service/whatsapp-agent.test.js
+  s_43369e3ca13536::t_66446a817d83c2 143-174
+python_service/main.py
+  s_43369e3ca13536::t_bfb7bdbcd8c4c9 12,289-315
+python_service/outputs.py
+  s_43369e3ca13536::t_bfb7bdbcd8c4c9 121-129
+README.md
+  s_43369e3ca13536::t_60e7bf5af3e40f 155-161
+docker-compose.yml
+  s_43369e3ca13536::t_50996e9192899e 12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5a3929fe30bc8c8f7920b869734a7bbb077078a2",
+  "prompts": {},
+  "sessions": {
+    "s_43369e3ca13536": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "45122e60-b98f-4083-8f1b-52a058ce8f1d",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "ori.suchy <ori.suchy@coro.net>"
+    }
+  }
+}

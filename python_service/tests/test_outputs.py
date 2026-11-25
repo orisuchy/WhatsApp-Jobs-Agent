@@ -224,3 +224,75 @@ def test_failing_email_does_not_stop_telegram_through_analyze(
 
     assert body["forward"] is True
     assert len(posts.calls) == 1
+
+
+# --- google sheets -------------------------------------------------------------
+
+
+class FakeWorksheet:
+    def __init__(self, rows=None):
+        self.rows = rows or []
+
+    def row_values(self, n):
+        return self.rows[n - 1] if len(self.rows) >= n else []
+
+    def append_row(self, row, value_input_option=None):
+        assert value_input_option == "RAW"
+        self.rows.append(row)
+
+
+@pytest.fixture
+def sheets_env(monkeypatch, tmp_path):
+    key = tmp_path / "sa.json"
+    key.write_text("{}")
+    monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_FILE", str(key))
+    monkeypatch.setenv("GOOGLE_SHEET_ID", "sheet-1")
+    ws = FakeWorksheet()
+    monkeypatch.setattr(outputs, "_open_worksheet", lambda: ws)
+    return ws
+
+
+def test_sheets_writes_header_then_row_on_empty_sheet(sheets_env):
+    outputs.sheets_output(_job())
+
+    header, row = sheets_env.rows
+    assert header == outputs.SHEET_HEADER
+    assert row == ["2026-01-01T00:00:00+00:00", 80, "Acme", "Python dev", "good fit", "G1",
+                   "https://x.io/j/1", "Python dev at Acme https://x.io/j/1"]
+
+
+def test_sheets_no_second_header_when_sheet_has_one(sheets_env):
+    sheets_env.rows = [outputs.SHEET_HEADER]
+    outputs.sheets_output(_job())
+    outputs.sheets_output(_job())
+    assert len(sheets_env.rows) == 3
+
+
+def test_sheets_missing_config_or_key_file_is_skipped(monkeypatch, sheets_env, caplog):
+    monkeypatch.setenv("OUTPUTS", "sheets")
+    monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_FILE", "/nope/sa.json")
+    with caplog.at_level(logging.WARNING, logger="job-agent.outputs"):
+        outputs.warn_missing_config()
+    assert "no such file" in caplog.text
+    outputs.dispatch(_job())
+    assert sheets_env.rows == []
+
+    monkeypatch.delenv("GOOGLE_SHEET_ID")
+    assert "GOOGLE_SHEET_ID" in outputs.missing_config("sheets")
+
+
+def test_sheets_selects_tab_and_uses_service_account(monkeypatch, sheets_env):
+    import sys, types
+    calls = {}
+    ws = FakeWorksheet()
+    book = MagicMock()
+    book.worksheet.side_effect = lambda t: (calls.setdefault("tab", t), ws)[1]
+    fake = types.SimpleNamespace(service_account=lambda filename: MagicMock(open_by_key=lambda k: (calls.setdefault("key", k), book)[1]))
+    monkeypatch.setitem(sys.modules, "gspread", fake)
+    monkeypatch.undo()  # drop the _open_worksheet stub; env is re-set below
+    monkeypatch.setitem(sys.modules, "gspread", fake)
+    monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_FILE", "x")
+    monkeypatch.setenv("GOOGLE_SHEET_ID", "sheet-9")
+    monkeypatch.setenv("GOOGLE_SHEET_TAB", "Matches")
+    assert outputs._open_worksheet() is ws
+    assert calls == {"key": "sheet-9", "tab": "Matches"}

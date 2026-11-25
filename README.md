@@ -50,6 +50,7 @@ unknown names are logged and ignored). One destination failing doesn't affect th
   (default `data/outputs`).
 - `telegram` — posts each match to a Telegram chat via the Bot API (see [Telegram](#telegram)).
 - `email` — sends each match as an email over SMTP with STARTTLS (see [Email](#email)).
+- `sheets` — appends one row per match to a Google Sheet (see [Google Sheets](#google-sheets)).
 
 A destination whose settings are missing is logged as a warning at startup and skipped.
 
@@ -100,6 +101,25 @@ Any SMTP server works. Gmail example:
 3. Set `OUTPUTS=whatsapp,email` in `.env`.
 
 STARTTLS is on by default (`SMTP_STARTTLS=1`). Leave `SMTP_USER` empty for a relay that needs no login.
+
+### Google Sheets
+
+1. In the [Google Cloud console](https://console.cloud.google.com/), create a project and enable
+   the **Google Sheets API** (APIs & Services → Library).
+2. IAM & Admin → Service Accounts → create one, then Keys → Add key → JSON. Save the download as
+   `data/service-account.json` (`data/` is git-ignored; never commit it).
+3. Open your Google Sheet and **Share** it (Editor) with the service account's email
+   (`...@<project>.iam.gserviceaccount.com`).
+4. In `.env` (Docker mounts `./data` at `/data`):
+   ```
+   GOOGLE_SERVICE_ACCOUNT_FILE=/data/service-account.json
+   GOOGLE_SHEET_ID=<the id from the sheet URL: /d/<id>/edit>
+   GOOGLE_SHEET_TAB=Matches   # optional, default: first tab
+   ```
+5. Set `OUTPUTS=whatsapp,sheets` in `.env`.
+
+A header row (date, score, company, summary, reason, group, URL, original text) is written if
+the sheet is empty.
 
 ## Choosing an LLM provider
 

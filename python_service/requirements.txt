@@ -6,3 +6,4 @@ pypdf
 requests
 beautifulsoup4
 openai
+gspread

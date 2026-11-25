@@ -24,7 +24,9 @@ NETWORK_TIMEOUT_S = 15
 REQUIRED_ENV = {
     "telegram": ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"),
     "email": ("SMTP_HOST", "EMAIL_FROM", "EMAIL_TO"),
+    "sheets": ("GOOGLE_SERVICE_ACCOUNT_FILE", "GOOGLE_SHEET_ID"),
 }
+SHEET_HEADER = ["date", "score", "company", "summary", "reason", "group", "URL", "original text"]
 
 LABELS = {
     "hebrew": ("משרה חדשה! {odds}% התאמה:", "קבוצה", "סיכום", "חברה", "סיבת התאמה", "המודעה המקורית"),
@@ -53,7 +55,11 @@ def requested_outputs() -> list[str]:
     return [n for n in names if n in known]
 
 def missing_config(name: str) -> list[str]:
-    return [v for v in REQUIRED_ENV.get(name, ()) if not os.environ.get(v)]
+    missing = [v for v in REQUIRED_ENV.get(name, ()) if not os.environ.get(v)]
+    key = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE")
+    if name == "sheets" and key and not os.path.isfile(key):
+        missing.append(f"GOOGLE_SERVICE_ACCOUNT_FILE (no such file: {key})")
+    return missing
 
 def enabled_outputs() -> list[str]:
     return [n for n in requested_outputs() if not missing_config(n)]
@@ -154,7 +160,23 @@ def email_output(job: dict) -> None:
             smtp.login(user, os.environ.get("SMTP_PASSWORD", ""))
         smtp.send_message(msg)
 
-DESTINATIONS = {"file": file_output, "telegram": telegram_output, "email": email_output}  # later tickets add destinations here
+def _open_worksheet():
+    import gspread  # lazy: only needed when `sheets` is enabled
+
+    sheet = gspread.service_account(filename=os.environ["GOOGLE_SERVICE_ACCOUNT_FILE"]).open_by_key(os.environ["GOOGLE_SHEET_ID"])
+    tab = os.environ.get("GOOGLE_SHEET_TAB")
+    return sheet.worksheet(tab) if tab else sheet.sheet1
+
+
+def sheets_output(job: dict) -> None:
+    ws = _open_worksheet()
+    if not ws.row_values(1):
+        ws.append_row(SHEET_HEADER, value_input_option="RAW")
+    row = [job["timestamp"], job["score"], job["company"], job["summary"], job["reason"], job["group"], job["url"] or "", job["text"]]
+    ws.append_row(row, value_input_option="RAW")  # RAW: posting text starting with "=" must not become a formula
+
+
+DESTINATIONS = {"file": file_output, "telegram": telegram_output, "email": email_output, "sheets": sheets_output}  # later tickets add destinations here
 
 
 def dispatch(job: dict) -> None:

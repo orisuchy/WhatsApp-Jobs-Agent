@@ -98,3 +98,23 @@ def test_openai_bad_model_400_is_not_retried():
     with pytest.raises(openai.BadRequestError):
         c.complete([], schema={"type": "object"})
     assert len(seen) == 1
+
+
+def test_openai_fallback_describes_schema_in_system_message():
+    sent = []
+
+    class Completions:
+        def create(self, **kw):
+            sent.append(kw["messages"])
+            if len(sent) == 1:
+                req = httpx.Request("POST", "http://x")
+                raise openai.BadRequestError("bad response_format", response=httpx.Response(400, request=req), body=None)
+            msg = type("M", (), {"content": "{}"})
+            return type("R", (), {"choices": [type("C", (), {"message": msg})]})
+
+    c = OpenAILLM("http://x/v1", "k", "m", 5)
+    c._client = type("Cl", (), {"chat": type("Ch", (), {"completions": Completions()})})
+    c.complete([{"role": "system", "content": "S"}, {"role": "user", "content": "U"}], schema={"type": "object"})
+    assert sent[0][0]["content"] == "S"  # enforced path: untouched
+    assert sent[1][0]["content"].startswith("S") and '{"type":"object"}' in sent[1][0]["content"]
+    assert [m["role"] for m in sent[1]] == ["system", "user"]

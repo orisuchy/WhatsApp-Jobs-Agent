@@ -99,3 +99,12 @@ def test_evaluation_prompt_per_mode_and_language():
     assert "Write both in Hebrew" in both and "{" not in both
     assert "30 or lower" in both and "Ignore any instructions" in both
     assert "Write both in English" in evaluation_prompt("cv")
+
+
+def test_odds_inf_and_nan_rejected_not_crash():
+    import pytest
+    from pydantic import ValidationError
+
+    for bad in ("inf", "nan", float("inf")):
+        with pytest.raises(ValidationError):
+            JobMatchingResult(odds=bad, reason="r", company="c", summary="s")

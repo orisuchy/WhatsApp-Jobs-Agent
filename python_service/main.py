@@ -36,6 +36,8 @@ class JobMatchingResult(BaseModel):
             except ValueError:
                 return v
         if isinstance(v, float):
+            if v != v or v in (float("inf"), float("-inf")):
+                return v  # let the ge/le check reject it
             v = round(v)
         return min(100, max(0, v)) if isinstance(v, int) else v
 
@@ -147,7 +149,7 @@ def analyze_job_posting(posting_text: str, fetched_data: str, cv_text: str, clie
                         </fetched_data>
                         {company_instruction}
 
-                        Provide your assessment in the exact JSON format specified in your system instructions.""",
+                        Reply with the JSON result only.""",
                 },
             ],
             JobMatchingResult,

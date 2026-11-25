@@ -270,6 +270,7 @@ def load_profile() -> None:
 @asynccontextmanager
 async def lifespan(app):
     load_profile()
+    outputs.warn_missing_config()
     yield
 
 

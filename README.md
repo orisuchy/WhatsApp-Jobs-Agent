@@ -48,6 +48,10 @@ unknown names are logged and ignored). One destination failing doesn't affect th
 - `whatsapp` — forwards to `TARGET_GROUP_ID`, in `OUTPUT_LANGUAGE` (Hebrew or English labels).
 - `file` — appends `matches.jsonl` and a readable `matches.md` to `OUTPUT_DIR`
   (default `data/outputs`).
+- `telegram` — posts each match to a Telegram chat via the Bot API (see [Telegram](#telegram)).
+- `email` — sends each match as an email over SMTP with STARTTLS (see [Email](#email)).
+
+A destination whose settings are missing is logged as a warning at startup and skipped.
 
 ### Sync the file output to Google Drive
 
@@ -65,6 +69,37 @@ the synced Drive, and bind-mount it as `OUTPUT_DIR` in `docker-compose.yml`:
 ```
 
 And set `OUTPUTS=whatsapp,file` in `.env`.
+
+### Telegram
+
+1. In Telegram, open **@BotFather**, send `/newbot`, and follow the prompts. Copy the token it
+   gives you into `TELEGRAM_BOT_TOKEN`.
+2. Create a group (or use a private chat) and add your bot to it. Send any message in it.
+3. Find the chat id: open `https://api.telegram.org/bot<TOKEN>/getUpdates` in a browser and look
+   for `"chat":{"id": ...}` — groups have negative ids, e.g. `-1001234567890`. Put it in
+   `TELEGRAM_CHAT_ID`.
+4. Set `OUTPUTS=whatsapp,telegram` (or just `telegram`) in `.env`.
+
+Messages are plain text and split into 4096-character parts when longer.
+
+### Email
+
+Any SMTP server works. Gmail example:
+
+1. Turn on 2-Step Verification on your Google account, then create an **app password**
+   at https://myaccount.google.com/apppasswords.
+2. In `.env`:
+   ```
+   SMTP_HOST=smtp.gmail.com
+   SMTP_PORT=587
+   SMTP_USER=you@gmail.com
+   SMTP_PASSWORD=<the 16-character app password>
+   EMAIL_FROM=you@gmail.com
+   EMAIL_TO=you@gmail.com
+   ```
+3. Set `OUTPUTS=whatsapp,email` in `.env`.
+
+STARTTLS is on by default (`SMTP_STARTTLS=1`). Leave `SMTP_USER` empty for a relay that needs no login.
 
 ## Choosing an LLM provider
 

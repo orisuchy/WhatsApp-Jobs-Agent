@@ -3,8 +3,13 @@ import hashlib
 import json
 import os
 import re
+import smtplib
+import ssl
 from datetime import datetime, timezone
+from email.message import EmailMessage
 from threading import Lock
+
+import requests
 
 from logger import setup_logger
 
@@ -12,6 +17,14 @@ logger = setup_logger("job-agent.outputs")
 
 _lock = Lock()
 URL_RE = re.compile(r"https?://\S+")
+
+TELEGRAM_MAX_CHARS = 4096
+NETWORK_TIMEOUT_S = 15
+# Env vars each destination needs; missing ones disable that destination (warned at startup).
+REQUIRED_ENV = {
+    "telegram": ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"),
+    "email": ("SMTP_HOST", "EMAIL_FROM", "EMAIL_TO"),
+}
 
 LABELS = {
     "hebrew": ("משרה חדשה! {odds}% התאמה:", "קבוצה", "סיכום", "חברה", "סיבת התאמה", "המודעה המקורית"),
@@ -31,13 +44,25 @@ def match_threshold() -> int:
         return 70
 
 
-def enabled_outputs() -> list[str]:
+def requested_outputs() -> list[str]:
     names = [n.strip().lower() for n in (os.environ.get("OUTPUTS") or "whatsapp").split(",") if n.strip()]
     known = ["whatsapp", *DESTINATIONS]
     for n in names:
         if n not in known:
             logger.error("Unknown OUTPUTS entry %r ignored (known: %s)", n, ", ".join(known))
     return [n for n in names if n in known]
+
+def missing_config(name: str) -> list[str]:
+    return [v for v in REQUIRED_ENV.get(name, ()) if not os.environ.get(v)]
+
+def enabled_outputs() -> list[str]:
+    return [n for n in requested_outputs() if not missing_config(n)]
+
+def warn_missing_config() -> None:
+    """Startup: say which requested destinations are switched off and why."""
+    for n in requested_outputs():
+        if missing := missing_config(n):
+            logger.warning("Output %r disabled, missing env: %s", n, ", ".join(missing))
 
 
 def job_key(text: str) -> str:
@@ -46,20 +71,27 @@ def job_key(text: str) -> str:
     return hashlib.sha256(basis.encode("utf-8")).hexdigest()
 
 
-def format_whatsapp(job: dict, language: str) -> str:
+def format_whatsapp(job: dict, language: str, bold: str = "*") -> str:
+    """Message text; `bold` is the emphasis marker (WhatsApp '*', plain text '')."""
     title, grp, summary, company, reason, original = LABELS["hebrew" if language.strip().lower() in ("hebrew", "עברית") else "english"]
     lines = [title.format(odds=job["score"]), ""]
     if job["group"]:
-        lines.append(f"*{grp}:* {job['group']}")
+        lines.append(f"{bold}{grp}:{bold} {job['group']}")
     lines += [
-        f"*{summary}:* {job['summary']}",
-        f"*{company}:* {job['company']}",
-        f"*{reason}:* {job['reason']}",
+        f"{bold}{summary}:{bold} {job['summary']}",
+        f"{bold}{company}:{bold} {job['company']}",
+        f"{bold}{reason}:{bold} {job['reason']}",
         "",
         f"--- {original} ---",
         job["text"],
     ]
     return "\n".join(lines)
+
+def _language() -> str:
+    return os.environ.get("OUTPUT_LANGUAGE") or "English"
+
+def _smtp_starttls_on() -> bool:
+    return os.environ.get("SMTP_STARTTLS", "1").strip().lower() not in ("0", "false", "no", "off")
 
 
 def record_if_new(data_dir: str, job: dict) -> bool:
@@ -95,7 +127,34 @@ def file_output(job: dict) -> None:
         f.write(md)
 
 
-DESTINATIONS = {"file": file_output}  # later tickets add destinations here
+def telegram_output(job: dict) -> None:
+    token, chat_id = os.environ["TELEGRAM_BOT_TOKEN"], os.environ["TELEGRAM_CHAT_ID"]
+    text = format_whatsapp(job, _language(), bold="")  # no parse_mode: posting text may hold * or _
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    # ponytail: hard cut at the limit; split on newlines if long messages read badly
+    for i in range(0, len(text), TELEGRAM_MAX_CHARS):
+        try:
+            r = requests.post(url, json={"chat_id": chat_id, "text": text[i:i + TELEGRAM_MAX_CHARS]}, timeout=NETWORK_TIMEOUT_S)
+            r.raise_for_status()
+        except requests.RequestException as e:  # re-raised without the URL, which holds the bot token
+            status = getattr(e.response, "status_code", None) or "no response"
+            raise RuntimeError(f"Telegram sendMessage failed ({status})") from None
+
+def email_output(job: dict) -> None:
+    msg = EmailMessage()
+    msg["Subject"] = f"New job match {job['score']}%: {job['company']}"
+    msg["From"] = os.environ["EMAIL_FROM"]
+    msg["To"] = os.environ["EMAIL_TO"]
+    msg.set_content(format_whatsapp(job, _language(), bold=""))
+    port = int(os.environ.get("SMTP_PORT") or 587)
+    with smtplib.SMTP(os.environ["SMTP_HOST"], port, timeout=NETWORK_TIMEOUT_S) as smtp:
+        if _smtp_starttls_on():
+            smtp.starttls(context=ssl.create_default_context())
+        if user := os.environ.get("SMTP_USER"):
+            smtp.login(user, os.environ.get("SMTP_PASSWORD", ""))
+        smtp.send_message(msg)
+
+DESTINATIONS = {"file": file_output, "telegram": telegram_output, "email": email_output}  # later tickets add destinations here
 
 
 def dispatch(job: dict) -> None:

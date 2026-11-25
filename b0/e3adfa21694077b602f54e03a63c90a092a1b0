@@ -1,0 +1,37 @@
+.env.example
+  s_b28ed1ff045f19::t_0e8714a6c08b26 12-14
+node_service/whatsapp-agent.test.js
+  s_b28ed1ff045f19::t_b571216906987e 95,141,156,172,188
+python_service/tests/test_llm.py
+  s_b28ed1ff045f19::t_0e8714a6c08b26 10,40
+python_service/main.py
+  s_b28ed1ff045f19::t_0e8714a6c08b26 12,17,24-40,133,138,163
+python_service/tests/test_main.py
+  s_b28ed1ff045f19::t_0e8714a6c08b26 13
+node_service/whatsapp-agent.js
+  s_b28ed1ff045f19::t_b571216906987e 59
+python_service/llm.py
+  s_b28ed1ff045f19::t_0e8714a6c08b26 53-56,59
+python_service/tests/test_analyzer.py
+  s_b28ed1ff045f19::t_0e8714a6c08b26 16,34,62,72
+  s_b28ed1ff045f19::t_b571216906987e 26,40,80-101
+python_service/prompts.py
+  s_b28ed1ff045f19::t_3f74ee94f52479 1,3-7,9-13,15,18-35,38-40,42-89
+  s_b28ed1ff045f19::t_0e8714a6c08b26 16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b0e3adfa21694077b602f54e03a63c90a092a1b0",
+  "prompts": {},
+  "sessions": {
+    "s_b28ed1ff045f19": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8a88efa0-6b27-4d3c-ab50-58db5a5f57a2",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "ori.suchy <ori.suchy@coro.net>"
+    }
+  }
+}

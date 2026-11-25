@@ -1,0 +1,19 @@
+python_service/tests/test_outputs.py
+  s_60f2d4adc06e22::t_ce49c50e2b4bf0 210-226
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c46a1ae9aa50c159f075573b9091ede317fbee4e",
+  "prompts": {},
+  "sessions": {
+    "s_60f2d4adc06e22": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4b55d941-b64a-43a8-8592-85446b0516b3",
+        "model": "claude-haiku-5-5"
+      },
+      "human_author": "ori.suchy <ori.suchy@coro.net>"
+    }
+  }
+}

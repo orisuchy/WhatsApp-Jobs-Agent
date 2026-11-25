@@ -1,44 +1,63 @@
 # Job Agent
 
-Local, self-hosted WhatsApp job-posting matcher. A Node.js WhatsApp client
-watches source groups, a Python FastAPI service asks an LLM (local Ollama by default)
-whether each posting matches your CV, and matches are forwarded to a target
-WhatsApp group.
+Local, self-hosted WhatsApp job-posting matcher. It watches the WhatsApp groups you choose,
+asks an LLM whether each posting fits your CV and the job you want, and sends the matches to
+WhatsApp, a file, Telegram, email or Google Sheets. It runs on your machine; the LLM can be
+local (Ollama) or a hosted API.
 
-## Prerequisites (you must supply these — they are not generated)
+## How it works
 
-1. **Ollama running on the host machine** with the model pulled:
+```
+WhatsApp source groups
+        │  (whatsapp-web.js, node_service)
+        ▼
+  keyword pre-filter ──► POST /analyze ──► python_service (FastAPI)
+                                              │ fetches linked posting, asks the LLM
+                                              ▼
+                                 score ≥ MATCH_THRESHOLD? ── dedup ──► outputs:
+                                 WhatsApp · file · Telegram · email · Google Sheets
+```
+
+The web UI (`python_service`, port 8000) shows status and matches and edits settings.
+
+## Quick start
+
+Requires Docker with Compose, and [Ollama](https://ollama.com) on the host (or a hosted LLM,
+see [LLM providers](#llm-providers)).
+
+1. `ollama pull gemma4:e2b`
+2. `cp .env.example .env`
+3. Add your profile: `mkdir -p data/profile`, then see [Profile](#profile).
+4. List your WhatsApp groups (name + JID; scan the QR code on first run):
    ```bash
-   ollama pull gemma4:e2b
+   LIST_GROUPS=1 docker compose run --rm node-whatsapp
    ```
-2. **Your profile** — a CV and/or a job description, see [Your profile](#your-profile).
-3. **Your WhatsApp groups** — see [Configure your groups](#configure-your-groups).
+   Paste the JIDs into `.env`: `SOURCE_GROUP_IDS` (comma-separated), `TARGET_GROUP_ID`, and
+   optionally `MATCH_THRESHOLD` (default 70) and `OUTPUTS`. You can also pick groups in the web UI.
+5. `docker compose up --build`
 
-## Your profile
+On first run `node-whatsapp` prints a QR code in its logs (also shown in the web UI): scan it
+via WhatsApp → Linked Devices. The session persists in the `whatsapp_session` Docker volume.
 
-Put these in `data/profile/` (gitignored, mounted into the Python service; create it with
-`mkdir -p data/profile`). You need at least one:
+### Data paths
+
+`./data` on the host is mounted at `/data` in the containers, and `.env` is read inside the
+containers. So in `.env` use container paths (`/data/service-account.json`); on the host the
+same file is `./data/service-account.json`. Only use `./data/...` in `.env` if you run the
+Python service directly on the host.
+
+## Profile
+
+Put these in `data/profile/` (gitignored). You need at least one:
 
 - `cv.pdf` — your CV (your background). Cleaned and anonymised by the LLM once, cached in
   `cv_clean_text.txt`; the cache refreshes automatically when `cv.pdf` changes.
 - `job_description.md` (or `.txt`) — free text describing the job you want.
 
-CV only, description only, or both (CV = background, description = what you're looking
-for) all work. With neither, the service logs an error and every posting is a no-match.
-Change the folder with `DATA_DIR`.
+CV only, description only, or both all work. With neither, the service logs an error and every
+posting is a no-match. Change the folder with `DATA_DIR`. Both can also be edited in the web UI.
 
-## Configure your groups
-
-1. `cp .env.example .env`
-2. List the groups you belong to (prints name + JID, then exits):
-   ```bash
-   LIST_GROUPS=1 docker compose run --rm node-whatsapp
-   ```
-   Or locally: `cd node_service && LIST_GROUPS=1 npm start`. Scan the QR code on first run.
-3. Paste the JIDs into `.env`: `SOURCE_GROUP_IDS` (comma-separated), `TARGET_GROUP_ID`,
-   and optionally `MATCH_THRESHOLD` (default 70) and `OUTPUTS`.
-
-## Where matches go
+## Outputs
 
 Every match at or above `MATCH_THRESHOLD` is recorded once in `data/matches.jsonl`;
 repeats of the same job (same first URL, or same text ignoring case/whitespace) across
@@ -110,7 +129,7 @@ STARTTLS is on by default (`SMTP_STARTTLS=1`). Leave `SMTP_USER` empty for a rel
    `data/service-account.json` (`data/` is git-ignored; never commit it).
 3. Open your Google Sheet and **Share** it (Editor) with the service account's email
    (`...@<project>.iam.gserviceaccount.com`).
-4. In `.env` (Docker mounts `./data` at `/data`):
+4. In `.env` (use the container path, see [Data paths](#data-paths)):
    ```
    GOOGLE_SERVICE_ACCOUNT_FILE=/data/service-account.json
    GOOGLE_SHEET_ID=<the id from the sheet URL: /d/<id>/edit>
@@ -121,10 +140,10 @@ STARTTLS is on by default (`SMTP_STARTTLS=1`). Leave `SMTP_USER` empty for a rel
 A header row (date, score, company, summary, reason, group, URL, original text) is written if
 the sheet is empty.
 
-## Choosing an LLM provider
+## LLM providers
 
 Set in `.env`. `LLM_PROVIDER=ollama` (default) talks to Ollama natively;
-`LLM_PROVIDER=openai` uses any OpenAI-compatible endpoint. Only Ollama is tested.
+`LLM_PROVIDER=openai` uses any OpenAI-compatible endpoint. **Tested:** Ollama. **Should work** (OpenAI-compatible, untested): everything else in the table.
 
 | Provider | `LLM_BASE_URL` | `LLM_MODEL` example |
 |---|---|---|
@@ -141,18 +160,7 @@ Also: `LLM_API_KEY` (hosted providers), `LLM_NUM_CTX` (Ollama only, default 1638
 A malformed model reply is retried once, then treated as no-match. Note: with a hosted
 provider your CV text (anonymised by the cleaning step) and postings are sent to it.
 
-## Running
-
-```bash
-docker compose up --build
-```
-
-On first run, `node-whatsapp` prints a QR code in the container logs — scan
-it with WhatsApp's "Linked Devices" to authenticate. The session persists in
-the `whatsapp_session` Docker volume, so you won't need to re-scan on
-restart unless the volume is removed.
-
-## Web UI
+## Web UI (local-only)
 
 Open <http://localhost:8000> for WhatsApp status, the QR code to scan (when not connected),
 and your matched jobs, newest first. The UI has no authentication, so compose publishes the
@@ -173,7 +181,7 @@ The same page edits your configuration, no container rebuild or restart needed:
   (a changed CV is re-cleaned by the LLM, which can take a moment).
 - The Google service-account key is still a file in `data/`; the form only takes its path.
 
-## Running the tests locally (outside Docker)
+## Running the tests
 
 Python:
 ```bash
@@ -189,3 +197,30 @@ cd node_service
 PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true npm install
 npm test
 ```
+
+## Privacy
+
+Everything stays on your machine except what you send out:
+
+- **LLM:** with Ollama (local) nothing leaves your machine. With a hosted provider (OpenAI,
+  Gemini, Groq, OpenRouter, Anthropic) every posting, any page fetched from a link in it, and your
+  anonymised CV text and job description are sent to that provider.
+- **Outputs:** matches (posting text, score, group name) go to whichever of Telegram, SMTP
+  server, Google Sheets, or your WhatsApp target group you enable.
+- **Web UI:** no authentication, bound to `127.0.0.1`; loads `qrcodejs` from cdnjs in your browser.
+- Secrets live in `.env` / `data/settings.json` (both gitignored) and are never sent back to the browser.
+
+## Troubleshooting
+
+- **No QR code / can't link:** watch `docker compose logs -f node-whatsapp`, or open the web UI.
+  If the session is stale, `docker compose down -v` removes the `whatsapp_session` volume (you re-scan).
+- **Chromium "profile in use" / SingletonLock error:** a previous container died uncleanly.
+  Run `docker compose down` and start again; if it persists, remove the `whatsapp_session` volume.
+- **Ollama unreachable:** make sure `ollama serve` is running on the host and the model is pulled.
+  Inside Docker the URL is `http://host.docker.internal:11434`; on Linux Ollama must listen on
+  an address the container can reach (`OLLAMA_HOST=0.0.0.0`).
+- **Every posting is a no-match:** check the python-backend logs for a missing profile or LLM errors.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Licensed under the [MIT License](LICENSE).

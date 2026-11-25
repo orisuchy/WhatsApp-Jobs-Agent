@@ -1,0 +1,21 @@
+python_service/outputs.py
+  s_53d630698116da::t_262a19249fa86a 22-26,45,126
+python_service/tests/test_main.py
+  s_53d630698116da::t_f5b842396c08ac 246-250
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "65a594c93e5eec2c499389c3d0e1b4e029bcc8e6",
+  "prompts": {},
+  "sessions": {
+    "s_53d630698116da": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "af6398a2-698b-4862-84d5-d30fe87d5cfa",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "ori.suchy <ori.suchy@coro.net>"
+    }
+  }
+}

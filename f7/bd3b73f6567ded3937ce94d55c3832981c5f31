@@ -1,0 +1,25 @@
+README.md
+  s_78cd135fc0b231::t_32f022dae46ac4 12,35
+python_service/llm.py
+  s_78cd135fc0b231::t_32f022dae46ac4 11,60-61,72
+python_service/tests/test_llm.py
+  s_78cd135fc0b231::t_32f022dae46ac4 71-72,75,77,85-100
+.env.example
+  s_78cd135fc0b231::t_32f022dae46ac4 17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f7bd3b73f6567ded3937ce94d55c3832981c5f31",
+  "prompts": {},
+  "sessions": {
+    "s_78cd135fc0b231": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e68869dc-c891-4ffa-9cba-9f403e40c882",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "ori.suchy <ori.suchy@coro.net>"
+    }
+  }
+}

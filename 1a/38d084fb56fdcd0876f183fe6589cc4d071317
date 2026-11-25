@@ -1,0 +1,32 @@
+python_service/main.py
+  s_452db77160b200::t_75379ebbf1596c 1,100,110-116,124-125,127,150-155,158,168-170,173-205,207-222,224-249,254,263-264,267
+docker-compose.yml
+  s_452db77160b200::t_af8e774faf754c 7-10
+README.md
+  s_452db77160b200::t_af8e774faf754c 14,17-28
+  s_452db77160b200::t_5b7b49c1c047eb 29
+.env.example
+  s_452db77160b200::t_af8e774faf754c 12-14
+.gitignore
+  s_452db77160b200::t_af8e774faf754c 12
+python_service/tests/test_main.py
+  s_452db77160b200::t_ac4a03d4d27b26 2-3,89-175
+python_service/tests/conftest.py
+  s_452db77160b200::t_ac4a03d4d27b26 1-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1a38d084fb56fdcd0876f183fe6589cc4d071317",
+  "prompts": {},
+  "sessions": {
+    "s_452db77160b200": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d6335595-c909-4960-860c-3f1bc33f9a33",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "ori.suchy <ori.suchy@coro.net>"
+    }
+  }
+}

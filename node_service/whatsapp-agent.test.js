@@ -182,3 +182,33 @@ test('forwarded message uses the group name from the WhatsApp chat', async (t) =
 
   assert.match(sentMessages[0].text, /\*קבוצה:\* Runtime Group/);
 });
+
+test('each posting is forwarded with its own text, timeout is passed to axios', async (t) => {
+  const postMock = t.mock.method(axios, 'post', async (url, body) => ({
+    data: { reason: 'r', summary: 's', odds: '90%', company: 'C' },
+  }));
+  const sentMessages = [];
+  const fakeClient = { sendMessage: async (to, text) => sentMessages.push({ to, text }) };
+
+  await Promise.all(['דרוש מפתח ALPHA', 'דרוש מפתח BETA'].map((body) =>
+    handleIncomingMessage(fakeClient, { from: firstSourceGroupId, body })
+  ));
+
+  assert.equal(sentMessages.length, 2);
+  assert.ok(sentMessages.some((m) => m.text.includes('ALPHA') && !m.text.includes('BETA')));
+  assert.ok(sentMessages.some((m) => m.text.includes('BETA') && !m.text.includes('ALPHA')));
+  assert.ok(postMock.mock.calls.every((c) => c.arguments[2].timeout >= 1000));
+});
+
+test('a timed-out analysis is skipped without forwarding', async (t) => {
+  t.mock.method(axios, 'post', async () => {
+    throw Object.assign(new Error('timeout of 180000ms exceeded'), { code: 'ECONNABORTED' });
+  });
+  const sentMessages = [];
+  const fakeClient = { sendMessage: async (to, text) => sentMessages.push({ to, text }) };
+
+  await assert.doesNotReject(
+    handleIncomingMessage(fakeClient, { from: firstSourceGroupId, body: 'דרוש מפתח' })
+  );
+  assert.equal(sentMessages.length, 0);
+});

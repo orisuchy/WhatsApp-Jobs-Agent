@@ -89,6 +89,8 @@ function getConfig() {
 }
 
 const ANALYZE_URL = process.env.ANALYZE_URL || 'http://python-backend:8000/analyze';
+const parsedTimeout = parseInt(process.env.ANALYZE_TIMEOUT_MS, 10);
+const ANALYZE_TIMEOUT_MS = parsedTimeout > 0 ? parsedTimeout : 180000;
 
 function parseOdds(oddsValue) {
   if (typeof oddsValue === 'number') {
@@ -112,31 +114,19 @@ async function handleIncomingMessage(client, message) {
   }
 
   try {
-    const { data } = await axios.post(ANALYZE_URL, { text: message.body });
+    const { data } = await axios.post(ANALYZE_URL, { text: message.body }, { timeout: ANALYZE_TIMEOUT_MS });
     if (!data) {
       log_info(`Message not sent - Job doesn't match`);
       return;
     }
 
-    // Handle batch response (when queue is full)
-    if (data.batch_results) {
-      log_info(`Queue was full. Processing batch of ${data.count} items.`);
-      for (const result of data.batch_results) {
-        await processSingleResult(client, result, message);
-      }
-      return;
-    }
-
-    // Handle queued response (when queue is not full yet)
-    if (data.queued) {
-      log_info(`Message added to queue (${data.queue_size}/${data.batch_size}). Awaiting batch processing.`);
-      return;
-    }
-
-    // Handle immediate single result (fallback for old format or flush endpoint)
     await processSingleResult(client, data, message);
 
   } catch (err) {
+    if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {
+      log_info(`Skipped posting - analysis timed out after ${ANALYZE_TIMEOUT_MS}ms: ${message.body.substring(0, 100)}`);
+      return;
+    }
     log_error('Failed to analyze/forward message: ' + err.message);
   }
 }

@@ -1,9 +1,11 @@
 import json
 import os
 import re
-from collections import deque
-from pprint import pprint
+import ipaddress
+import socket
+from contextlib import asynccontextmanager
 from threading import Lock
+from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 from fastapi import FastAPI
@@ -38,10 +40,22 @@ def extract_first_url(text: str):
     return match.group(0) if match else None
 
 
+def assert_safe_url(url: str) -> None:
+    """Refuse non-http(s) URLs and hosts resolving to non-public addresses."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise ValueError(f"Unsafe URL scheme: {url}")
+    # ponytail: resolve-then-fetch leaves a DNS-rebinding window; pin the IP if that matters
+    for info in socket.getaddrinfo(parsed.hostname, None):
+        ip = ipaddress.ip_address(info[4][0].split("%")[0])
+        if not ip.is_global:
+            raise ValueError(f"Refusing non-public address {ip} for {url}")
+
 def fetch_url_text(url: str, timeout: int = 30) -> tuple[str, str | None]:
     # Standard HTTP fetch with BeautifulSoup
     try:
-        response = requests.get(url, timeout=timeout, headers={"User-Agent": "Mozilla/5.0"})
+        assert_safe_url(url)
+        response = requests.get(url, timeout=timeout, allow_redirects=False, headers={"User-Agent": "Mozilla/5.0"})
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
 
@@ -144,11 +158,7 @@ OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "gemma4:e2b")
 CV_TEXT = ""
 ollama_client = Client(host=OLLAMA_URL)
 
-app = FastAPI()
-
-job_queue = deque(maxlen=5)
-queue_lock = Lock()
-BATCH_SIZE = 5
+llm_lock = Lock()  # one LLM call at a time
 
 
 class JobPosting(BaseModel):
@@ -183,7 +193,6 @@ def clean_cv(raw_cv_text, client, model: str):
         return raw_cv_text
 
 
-@app.on_event("startup")
 def load_cv() -> None:
     global CV_TEXT
     cv_clean_text_path = os.path.join(os.path.dirname(__file__), "files", "cv_clean_text.txt")
@@ -201,70 +210,17 @@ def load_cv() -> None:
         CV_TEXT = ""
 
 
-def process_batch() -> list:
-    with queue_lock:
-        if not job_queue:
-            return []
-        batch = list(job_queue)
-        job_queue.clear()
+@asynccontextmanager
+async def lifespan(app):
+    load_cv()
+    yield
 
-    results = []
-    for text in batch:
-        try:
-            fetched_data, company_name = extract_fetched_data(text)
-            result = analyze_job_posting(text, fetched_data, CV_TEXT, ollama_client, OLLAMA_MODEL, company_name)
-            results.append(result)
-        except Exception:
-            logger.exception("Failed to process posting in batch")
-            results.append({"odds": 0})
 
-    return results
+app = FastAPI(lifespan=lifespan)
 
 
 @app.post("/analyze")
 def analyze(posting: JobPosting) -> dict:
-    with queue_lock:
-        job_queue.append(posting.text)
-        queue_size = len(job_queue)
-
-    if queue_size == BATCH_SIZE:
-        logger.info("Queue full (%d items), processing batch", BATCH_SIZE)
-        results = process_batch()
-        return {"batch_results": results, "count": len(results)}
-
-    logger.info("Added to queue (%d/%d items)", queue_size, BATCH_SIZE)
-    return {"queued": True, "queue_size": queue_size, "batch_size": BATCH_SIZE}
-
-
-@app.post("/analyze/flush")
-def flush_queue() -> dict:
-    with queue_lock:
-        queue_size = len(job_queue)
-
-    if queue_size == 0:
-        logger.info("Queue is empty, nothing to process")
-        return {"processed": 0, "message": "queue was empty"}
-
-    logger.info("Flushing queue with %d items", queue_size)
-    results = process_batch()
-    return {"batch_results": results, "count": len(results)}
-
-if __name__ == "__main__":
-    cv_clean_text_path = os.path.join(os.path.dirname(__file__), "files", "cv_clean_text.txt")
-    with open(cv_clean_text_path, "r") as f:
-        TEST_CV_TEXT = f.read()
-    posting_text = """
-    היי חברים, אנחנו Chamelio, סטארטאפ בתחום הlegal-tech שמפתח פלטפורמת AI לצוותים משפטיים בחברות טק.
-
-אנחנו אחרי סבב seed וכבר עם לקוחות כמו wiz, Appsflyer, Monday ועוד.
-אנחנו גדלים ומחפשים סניור דבאופס.
- המשרה היא לא remote, יש ימים מהבית אבל בבקשה לא לפנות אם אין אפשרות בכלל להגיע למשרד (נמצא באיזור הבורסה)
-
-מי שרלוונטי לו מוזמן לדבר איתי 🙂
-
-https://www.linkedin.com/jobs/view/4437267071/
-    """
-    fetched_data, company_name = extract_fetched_data(posting_text)
-    result = analyze_job_posting(posting_text, fetched_data, TEST_CV_TEXT, ollama_client, OLLAMA_MODEL, company_name)
-    pprint(result)
-
+    fetched_data, company_name = extract_fetched_data(posting.text)
+    with llm_lock:
+        return analyze_job_posting(posting.text, fetched_data, CV_TEXT, ollama_client, OLLAMA_MODEL, company_name)

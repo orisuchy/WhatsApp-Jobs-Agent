@@ -11,8 +11,21 @@ WhatsApp group.
    ```bash
    ollama pull gemma4:e2b
    ```
-2. **Your CV as a PDF** at `python_service/my_cv.pdf`.
+2. **Your profile** — a CV and/or a job description, see [Your profile](#your-profile).
 3. **Your WhatsApp groups** — see [Configure your groups](#configure-your-groups).
+
+## Your profile
+
+Put these in `data/profile/` (gitignored, mounted into the Python service; create it with
+`mkdir -p data/profile`). You need at least one:
+
+- `cv.pdf` — your CV (your background). Cleaned and anonymised by the LLM once, cached in
+  `cv_clean_text.txt`; the cache refreshes automatically when `cv.pdf` changes.
+- `job_description.md` (or `.txt`) — free text describing the job you want.
+
+CV only, description only, or both (CV = background, description = what you're looking
+for) all work. With neither, the service logs an error and every posting is a no-match.
+Change the folder with `DATA_DIR`.
 
 ## Configure your groups
 

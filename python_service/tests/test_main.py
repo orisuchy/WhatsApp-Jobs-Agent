@@ -1,4 +1,6 @@
 import json
+import os
+import shutil
 import time
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock
@@ -73,14 +75,6 @@ def test_failure_yields_zero_odds(monkeypatch):
     assert response.json() == {"odds": 0}
 
 
-def test_startup_missing_cv_sets_empty_cv_text(monkeypatch):
-    monkeypatch.setattr(main, "CV_PATH", "/no/such/file.pdf")
-    monkeypatch.setattr(main.os.path, "exists", lambda p: False)
-    with TestClient(main.app):
-        pass
-    assert main.CV_TEXT == ""
-
-
 def test_analyze_includes_fetched_job_description(monkeypatch):
     with TestClient(main.app) as c:
         monkeypatch.setattr(main, "CV_TEXT", "Python")
@@ -92,3 +86,90 @@ def test_analyze_includes_fetched_job_description(monkeypatch):
 
     sent = client.complete.call_args[0][0][1]["content"]
     assert "תיאור משרה מלא מהקישור" in sent
+
+
+# --- candidate profile -------------------------------------------------------
+
+FIXTURE_CV = os.path.join(os.path.dirname(__file__), "fixtures", "sample_cv.pdf")
+
+
+def _profile(tmp_path, cv=False, jd=None, jd_name="job_description.md"):
+    d = tmp_path / "profile"
+    d.mkdir(exist_ok=True)
+    if cv:
+        shutil.copy(FIXTURE_CV, d / "cv.pdf")
+    if jd is not None:
+        (d / jd_name).write_text(jd, encoding="utf-8")
+    return d
+
+
+def _sent(client):
+    return client.complete.call_args[0][0][1]["content"]
+
+
+def test_missing_profile_returns_no_match_without_calling_llm(tmp_path, monkeypatch):
+    client = _mock_llm(monkeypatch)
+    with TestClient(main.app) as c:
+        response = _analyze(c)
+    assert response.json() == {"odds": 0}
+    client.complete.assert_not_called()
+
+
+def test_cv_only_mode(tmp_path, monkeypatch):
+    _profile(tmp_path, cv=True)
+    client = _mock_llm(monkeypatch)
+    monkeypatch.setattr(main, "clean_cv", lambda raw, c: "CLEANED CV")
+    with TestClient(main.app) as c:
+        assert _analyze(c).json() == GOOD
+    sent = _sent(client)
+    assert "<candidate_cv>" in sent and "CLEANED CV" in sent
+    assert "<desired_job_description>" not in sent
+    assert "Profile mode: cv" in sent
+
+
+def test_jd_only_mode_txt(tmp_path, monkeypatch):
+    _profile(tmp_path, jd="Senior Rust backend", jd_name="job_description.txt")
+    client = _mock_llm(monkeypatch)
+    with TestClient(main.app) as c:
+        assert _analyze(c).json() == GOOD
+    sent = _sent(client)
+    assert "<desired_job_description>" in sent and "Senior Rust backend" in sent
+    assert "<candidate_cv>" not in sent
+    assert "Profile mode: jd" in sent
+
+
+def test_both_mode(tmp_path, monkeypatch):
+    _profile(tmp_path, cv=True, jd="Remote only")
+    client = _mock_llm(monkeypatch)
+    monkeypatch.setattr(main, "clean_cv", lambda raw, c: "CLEANED CV")
+    with TestClient(main.app) as c:
+        _analyze(c)
+    sent = _sent(client)
+    assert "CLEANED CV" in sent and "Remote only" in sent
+    assert "Profile mode: both" in sent
+
+
+def test_cv_cache_reused_and_invalidated_on_change(tmp_path, monkeypatch):
+    d = _profile(tmp_path, cv=True)
+    calls = []
+    monkeypatch.setattr(main, "clean_cv", lambda raw, c: calls.append(raw) or f"clean{len(calls)}")
+
+    assert main.load_cv() == "clean1"
+    assert main.load_cv() == "clean1"  # cache hit
+    assert len(calls) == 1
+
+    # a different CV file -> re-clean
+    (d / "cv.pdf").write_bytes((d / "cv.pdf").read_bytes() + b"\n%changed")
+    assert main.load_cv() == "clean2"
+    assert len(calls) == 2
+
+
+def test_failed_cleaning_falls_back_to_raw_and_is_not_cached(tmp_path, monkeypatch):
+    d = _profile(tmp_path, cv=True)
+
+    def boom(raw, c):
+        raise RuntimeError("llm down")
+
+    monkeypatch.setattr(main, "clean_cv", boom)
+    assert "Python" in main.load_cv()
+    assert not (d / "cv_clean_text.txt").exists()

@@ -4,6 +4,10 @@ services:
     env_file: .env
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - ./data:/data
     ports:
       - "8000:8000"
     restart: unless-stopped

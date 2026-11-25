@@ -9,6 +9,7 @@ __pycache__/
 # Personal data — never commit
 .env
 python_service/files/
+data/
 
 # Local tooling
 .idea/

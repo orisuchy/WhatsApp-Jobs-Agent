@@ -30,7 +30,7 @@ see [LLM providers](#llm-providers)).
 3. Add your profile: `mkdir -p data/profile`, then see [Profile](#profile).
 4. List your WhatsApp groups (name + JID; scan the QR code on first run):
    ```bash
-   LIST_GROUPS=1 docker compose run --rm node-whatsapp
+   docker compose run --rm -e LIST_GROUPS=1 node-whatsapp
    ```
    Paste the JIDs into `.env`: `SOURCE_GROUP_IDS` (comma-separated), `TARGET_GROUP_ID`, and
    optionally `MATCH_THRESHOLD` (default 70) and `OUTPUTS`. You can also pick groups in the web UI.
@@ -158,7 +158,7 @@ Set in `.env`. `LLM_PROVIDER=ollama` (default) talks to Ollama natively;
 Also: `LLM_API_KEY` (hosted providers), `LLM_NUM_CTX` (Ollama only, default 16384),
 `LLM_TIMEOUT_S` (default 170). `OLLAMA_URL` / `OLLAMA_MODEL` still work as fallbacks.
 A malformed model reply is retried once, then treated as no-match. Note: with a hosted
-provider your CV text (anonymised by the cleaning step) and postings are sent to it.
+provider your CV and postings are sent to it (the raw CV text goes once for the cleaning/anonymising step).
 
 ## Web UI (local-only)
 
@@ -203,8 +203,9 @@ npm test
 Everything stays on your machine except what you send out:
 
 - **LLM:** with Ollama (local) nothing leaves your machine. With a hosted provider (OpenAI,
-  Gemini, Groq, OpenRouter, Anthropic) every posting, any page fetched from a link in it, and your
-  anonymised CV text and job description are sent to that provider.
+  Gemini, Groq, OpenRouter, Anthropic) every posting, any page fetched from a link in it, your job
+  description, and your CV (raw text once for cleaning/anonymising, then the anonymised version) are sent to
+  whichever provider you configure. Messages without job keywords never reach the LLM.
 - **Outputs:** matches (posting text, score, group name) go to whichever of Telegram, SMTP
   server, Google Sheets, or your WhatsApp target group you enable.
 - **Web UI:** no authentication, bound to `127.0.0.1`; loads `qrcodejs` from cdnjs in your browser.
@@ -214,11 +215,12 @@ Everything stays on your machine except what you send out:
 
 - **No QR code / can't link:** watch `docker compose logs -f node-whatsapp`, or open the web UI.
   If the session is stale, `docker compose down -v` removes the `whatsapp_session` volume (you re-scan).
-- **Chromium "profile in use" / SingletonLock error:** a previous container died uncleanly.
-  Run `docker compose down` and start again; if it persists, remove the `whatsapp_session` volume.
+- **Chromium "profile in use" / SingletonLock error:** the container deletes stale locks on start, so
+  `docker compose restart node-whatsapp` is usually enough; if it persists, remove the `whatsapp_session` volume.
 - **Ollama unreachable:** make sure `ollama serve` is running on the host and the model is pulled.
   Inside Docker the URL is `http://host.docker.internal:11434`; on Linux Ollama must listen on
   an address the container can reach (`OLLAMA_HOST=0.0.0.0`).
+- **Nothing is analysed:** a keyword pre-filter in `node_service/whatsapp-agent.js` (`JOB_KEYWORDS`, Hebrew and English hiring phrases) drops messages that look unrelated to jobs.
 - **Every posting is a no-match:** check the python-backend logs for a missing profile or LLM errors.
 
 ## Contributing

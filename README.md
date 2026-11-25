@@ -9,7 +9,7 @@ WhatsApp group.
 
 1. **Ollama running on the host machine** with the model pulled:
    ```bash
-   ollama pull llama3.1
+   ollama pull gemma4:e2b
    ```
 2. **Your CV as a PDF** at `python_service/my_cv.pdf`.
 3. **Your WhatsApp groups** — see [Configure your groups](#configure-your-groups).
@@ -32,7 +32,7 @@ Set in `.env`. `LLM_PROVIDER=ollama` (default) talks to Ollama natively;
 
 | Provider | `LLM_BASE_URL` | `LLM_MODEL` example |
 |---|---|---|
-| Ollama (default, tested) | `http://host.docker.internal:11434` (default) | `llama3.1` |
+| Ollama (default, tested) | `http://host.docker.internal:11434` (default) | `gemma4:e2b` |
 | OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` |
 | Gemini | `https://generativelanguage.googleapis.com/v1beta/openai/` | `gemini-2.0-flash` |
 | Groq | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` |

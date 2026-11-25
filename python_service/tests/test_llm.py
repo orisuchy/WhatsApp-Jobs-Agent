@@ -68,11 +68,13 @@ def test_openai_falls_back_when_json_schema_rejected():
     seen = []
 
     class Completions:
+        msg, always = "Unsupported response_format json_schema", False
+
         def create(self, **kw):
             seen.append(kw.get("response_format", {}).get("type"))
-            if len(seen) == 1:
+            if len(seen) == 1 or self.always:
                 req = httpx.Request("POST", "http://x")
-                raise openai.BadRequestError("bad", response=httpx.Response(400, request=req), body=None)
+                raise openai.BadRequestError(self.msg, response=httpx.Response(400, request=req), body=None)
             msg = type("M", (), {"content": "{}"})
             return type("R", (), {"choices": [type("C", (), {"message": msg})]})
 
@@ -80,3 +82,19 @@ def test_openai_falls_back_when_json_schema_rejected():
     c._client = type("Cl", (), {"chat": type("Ch", (), {"completions": Completions()})})
     assert c.complete([], schema={"type": "object"}) == "{}"
     assert seen == ["json_schema", "json_object"]
+
+
+def test_openai_bad_model_400_is_not_retried():
+    seen = []
+
+    class Completions:
+        def create(self, **kw):
+            seen.append(1)
+            req = httpx.Request("POST", "http://x")
+            raise openai.BadRequestError("model not found", response=httpx.Response(400, request=req), body=None)
+
+    c = OpenAILLM("http://x/v1", "k", "m", 5)
+    c._client = type("Cl", (), {"chat": type("Ch", (), {"completions": Completions()})})
+    with pytest.raises(openai.BadRequestError):
+        c.complete([], schema={"type": "object"})
+    assert len(seen) == 1

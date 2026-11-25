@@ -8,6 +8,7 @@ from logger import setup_logger
 
 logger = setup_logger("job-agent.llm")
 
+DEFAULT_MODEL = "gemma4:e2b"  # keep in sync with .env.example and README
 DEFAULT_OLLAMA_URL = "http://host.docker.internal:11434"
 
 
@@ -56,7 +57,8 @@ class OpenAILLM:
                 return r.choices[0].message.content or ""
             except APIStatusError as e:
                 # provider rejected the format parameter: try the next, weaker one
-                if e.status_code not in (400, 422) or i == len(formats) - 1:
+                about_format = "response_format" in str(e).lower() or "json_schema" in str(e).lower() or "json_object" in str(e).lower()
+                if e.status_code not in (400, 422) or not about_format or i == len(formats) - 1:
                     raise
                 logger.warning("Provider rejected response_format %s, falling back", fmt and fmt["type"])
 
@@ -67,7 +69,7 @@ def load_llm_client(env=os.environ):
     if provider == "ollama":
         return OllamaLLM(
             env.get("LLM_BASE_URL") or env.get("OLLAMA_URL") or DEFAULT_OLLAMA_URL,
-            env.get("LLM_MODEL") or env.get("OLLAMA_MODEL") or "gemma4:e2b",
+            env.get("LLM_MODEL") or env.get("OLLAMA_MODEL") or DEFAULT_MODEL,
             int(env.get("LLM_NUM_CTX", 16384)),
             timeout,
         )

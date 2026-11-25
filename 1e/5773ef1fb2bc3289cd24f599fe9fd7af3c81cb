@@ -1,0 +1,35 @@
+python_service/tests/test_llm.py
+  s_78cd135fc0b231::t_c8e9223d01734b 1-82
+python_service/requirements.txt
+  s_78cd135fc0b231::t_b3bf416d44d412 8
+python_service/tests/test_analyzer.py
+  s_78cd135fc0b231::t_c8e9223d01734b 9,24,38,46,53,55,60,65-67,76,79
+python_service/tests/test_main.py
+  s_78cd135fc0b231::t_c8e9223d01734b 14,17,19-20,31,45,50,52,55,58,69,90,93
+python_service/llm.py
+  s_78cd135fc0b231::t_b3bf416d44d412 92-94,98-99
+  s_78cd135fc0b231::t_1d6bda07897300 1-91,95-97,100-101
+python_service/main.py
+  s_78cd135fc0b231::t_b3bf416d44d412 15,99,109-111,134-136,138,147,156,159-160,173,190,210
+.env.example
+  s_78cd135fc0b231::t_2cf3f6f7f3676a 11-30
+README.md
+  s_78cd135fc0b231::t_2cf3f6f7f3676a 4,28-46
+  s_78cd135fc0b231::t_1d3dcadb41ddd1 47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1e5773ef1fb2bc3289cd24f599fe9fd7af3c81cb",
+  "prompts": {},
+  "sessions": {
+    "s_78cd135fc0b231": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e68869dc-c891-4ffa-9cba-9f403e40c882",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "ori.suchy <ori.suchy@coro.net>"
+    }
+  }
+}

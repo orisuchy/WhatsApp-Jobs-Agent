@@ -1,5 +1,8 @@
 'use strict';
 
+process.env.SOURCE_GROUP_IDS = 'src1@g.us,src2@g.us';
+process.env.TARGET_GROUP_ID = 'target@g.us';
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
@@ -59,19 +62,11 @@ const axios = require('axios');
 const {
   handleIncomingMessage,
   parseOdds,
-  SOURCE_GROUP_IDS,
-  TARGET_GROUP_ID,
+  getConfig,
 } = require('./whatsapp-agent');
 
-// Helper to get the first source group ID (works with both arrays and objects)
-function getFirstSourceGroupId() {
-  if (Array.isArray(SOURCE_GROUP_IDS)) {
-    return SOURCE_GROUP_IDS[0];
-  }
-  return Object.keys(SOURCE_GROUP_IDS)[0];
-}
-
-const firstSourceGroupId = getFirstSourceGroupId();
+const firstSourceGroupId = getConfig().sourceGroupIds[0];
+const TARGET_GROUP_ID = getConfig().targetGroupId;
 
 test('handleIncomingMessage ignores messages from non-source groups', async (t) => {
   const postMock = t.mock.method(axios, 'post', async () => ({ data: {} }));
@@ -170,4 +165,20 @@ test('handleIncomingMessage forwards when odds are 70% or higher', async (t) => 
 
   assert.equal(sentMessages.length, 1);
   assert.equal(sentMessages[0].to, TARGET_GROUP_ID);
+});
+
+test('forwarded message uses the group name from the WhatsApp chat', async (t) => {
+  t.mock.method(axios, 'post', async () => ({
+    data: { reason: 'x', summary: 'y', odds: '90%' },
+  }));
+  const sentMessages = [];
+  const fakeClient = { sendMessage: async (to, text) => sentMessages.push({ to, text }) };
+
+  await handleIncomingMessage(fakeClient, {
+    from: firstSourceGroupId,
+    body: 'דרוש מפתח Python',
+    getChat: async () => ({ name: 'Runtime Group' }),
+  });
+
+  assert.match(sentMessages[0].text, /\*קבוצה:\* Runtime Group/);
 });

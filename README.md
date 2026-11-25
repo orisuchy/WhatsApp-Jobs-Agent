@@ -12,10 +12,18 @@ WhatsApp group.
    ollama pull llama3.1
    ```
 2. **Your CV as a PDF** at `python_service/my_cv.pdf`.
-3. **Real WhatsApp group IDs** — edit `SOURCE_GROUP_IDS` and `TARGET_GROUP_ID`
-   at the top of `node_service/whatsapp-agent.js`. Group JIDs look like
-   `120363012345678901@g.us`; the easiest way to find them is to log the
-   `message.from` value once the bot is running against your real groups.
+3. **Your WhatsApp groups** — see [Configure your groups](#configure-your-groups).
+
+## Configure your groups
+
+1. `cp .env.example .env`
+2. List the groups you belong to (prints name + JID, then exits):
+   ```bash
+   LIST_GROUPS=1 docker compose run --rm node-whatsapp
+   ```
+   Or locally: `cd node_service && LIST_GROUPS=1 npm start`. Scan the QR code on first run.
+3. Paste the JIDs into `.env`: `SOURCE_GROUP_IDS` (comma-separated), `TARGET_GROUP_ID`,
+   and optionally `MATCH_THRESHOLD` (default 70).
 
 ## Running
 

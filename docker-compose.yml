@@ -1,6 +1,7 @@
 services:
   python-backend:
     build: ./python_service
+    env_file: .env
     environment:
       - OLLAMA_URL=http://host.docker.internal:11434
       - OLLAMA_MODEL=gemma4:12b
@@ -12,6 +13,7 @@ services:
 
   node-whatsapp:
     build: ./node_service
+    env_file: .env
     depends_on:
       - python-backend
     volumes:

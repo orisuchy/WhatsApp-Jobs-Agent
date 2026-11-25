@@ -1,5 +1,5 @@
 import main
-from main import extract_first_url, build_posting_text
+from main import extract_first_url, extract_fetched_data
 
 
 def test_extract_first_url_finds_url_in_text():
@@ -11,24 +11,24 @@ def test_extract_first_url_returns_none_when_absent():
     assert extract_first_url("דרוש מפתח Python, פנו בהודעה פרטית") is None
 
 
-def test_build_posting_text_passes_through_when_no_url():
-    assert build_posting_text("דרוש מפתח Python") == "דרוש מפתח Python"
+def test_extract_fetched_data_no_url():
+    assert extract_fetched_data("דרוש מפתח Python") == ("no fetched data", None)
 
 
-def test_build_posting_text_concatenates_fetched_content(monkeypatch):
+def test_extract_fetched_data_returns_fetched_text_and_company(monkeypatch):
     monkeypatch.setattr(
-        main, "fetch_url_text", lambda url, timeout=10: "Full job description here"
+        main,
+        "fetch_url_text",
+        lambda url, timeout=30: ("Full job description here", "Acme"),
     )
-    result = build_posting_text("דרוש מפתח Python https://example.com/jobs/123")
-    assert "דרוש מפתח Python" in result
-    assert "Full job description here" in result
-    assert result.index("דרוש מפתח Python") < result.index("Full job description here")
+    result = extract_fetched_data("דרוש מפתח Python https://example.com/jobs/123")
+    assert result == ("Full job description here", "Acme")
 
 
-def test_build_posting_text_falls_back_when_fetch_fails(monkeypatch):
-    def _raise(url, timeout=10):
+def test_extract_fetched_data_falls_back_when_fetch_fails(monkeypatch):
+    def _raise(url, timeout=30):
         raise RuntimeError("network down")
 
     monkeypatch.setattr(main, "fetch_url_text", _raise)
-    result = build_posting_text("דרוש מפתח Python https://example.com/jobs/123")
-    assert result == "דרוש מפתח Python https://example.com/jobs/123"
+    result = extract_fetched_data("דרוש מפתח Python https://example.com/jobs/123")
+    assert result == ("no fetched data", None)

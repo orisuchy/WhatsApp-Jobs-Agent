@@ -34,11 +34,7 @@ const JOB_KEYWORDS = [
 
 
 function isFromSourceGroup(messageFrom, sourceIds) {
-  // sourceIds can be either an array (for backward compatibility with tests) or an object
-  if (Array.isArray(sourceIds)) {
-    return sourceIds.includes(messageFrom);
-  }
-  return messageFrom in sourceIds;
+  return sourceIds.includes(messageFrom);
 }
 
 function containsJobKeywords(text, keywords = JOB_KEYWORDS) {
@@ -79,11 +75,18 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const axios = require('axios');
 
-const SOURCE_GROUP_IDS = {
-  // Configured via .env (see .env.example) — ticket 01.
-};
-
-const TARGET_GROUP_ID = process.env.TARGET_GROUP_ID || '';
+// Single access point for configuration (read on every call so it can be swapped later).
+function getConfig() {
+  const threshold = parseInt(process.env.MATCH_THRESHOLD, 10);
+  return {
+    sourceGroupIds: (process.env.SOURCE_GROUP_IDS || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean),
+    targetGroupId: process.env.TARGET_GROUP_ID || '',
+    matchThreshold: isNaN(threshold) ? 70 : threshold,
+  };
+}
 
 const ANALYZE_URL = process.env.ANALYZE_URL || 'http://python-backend:8000/analyze';
 
@@ -99,7 +102,7 @@ function parseOdds(oddsValue) {
 }
 
 async function handleIncomingMessage(client, message) {
-  if (!isFromSourceGroup(message.from, SOURCE_GROUP_IDS)) {
+  if (!isFromSourceGroup(message.from, getConfig().sourceGroupIds)) {
     log_info(`Ignoring message from ${message.from} (not in source group)`);
     return;
   }
@@ -140,14 +143,17 @@ async function handleIncomingMessage(client, message) {
 
 async function processSingleResult(client, result, message) {
   const odds = parseOdds(result.odds);
-  const oddsThreshold = 70;
-  if (odds <= oddsThreshold) {
+  const oddsThreshold = getConfig().matchThreshold;
+  if (odds < oddsThreshold) {
     log_info(`Message not sent - odds below ${oddsThreshold}% threshold. Odds: ${odds}%, Reason: ${result.reason || 'N/A'}, Text: ${message.body.substring(0, 100)}`);
     return;
   }
-  const groupName = typeof SOURCE_GROUP_IDS === 'object' && !Array.isArray(SOURCE_GROUP_IDS)
-    ? SOURCE_GROUP_IDS[message.from]
-    : undefined;
+  let groupName;
+  try {
+    groupName = (await message.getChat?.())?.name;
+  } catch (err) {
+    log_error('Could not read group name: ' + err.message);
+  }
   const forwardText = formatForwardMessage({
     odds: result.odds,
     reason: result.reason,
@@ -156,7 +162,7 @@ async function processSingleResult(client, result, message) {
     originalText: message.body,
     groupName,
   });
-  await client.sendMessage(TARGET_GROUP_ID, forwardText);
+  await client.sendMessage(getConfig().targetGroupId, forwardText);
 }
 
 function createClient() {
@@ -169,6 +175,13 @@ function createClient() {
   });
 }
 
+async function listGroups(client) {
+  const chats = await client.getChats();
+  for (const chat of chats.filter((c) => c.isGroup)) {
+    log_info(`GROUP: ${chat.name} -> ${chat.id._serialized}`);
+  }
+}
+
 function start() {
   const client = createClient();
 
@@ -179,7 +192,13 @@ function start() {
 
   client.on('ready', () => {
     log_info('WhatsApp client ready.');
-    client.sendMessage(TARGET_GROUP_ID, `************ ${getTimestamp()} Client on - Collecting data ************`);
+    if (process.env.LIST_GROUPS === '1') {
+      listGroups(client)
+        .catch((err) => log_error("Failed to list groups: " + err.message))
+        .finally(() => process.exit(0));
+      return;
+    }
+    client.sendMessage(getConfig().targetGroupId, `************ ${getTimestamp()} Client on - Collecting data ************`);
   });
 
   client.on('auth_failure', (msg) => {
@@ -188,7 +207,7 @@ function start() {
 
   client.on('disconnected', () => {
     log_info('WhatsApp client disconnected.');
-    client.sendMessage(TARGET_GROUP_ID, "************ Client Off ************");
+    client.sendMessage(getConfig().targetGroupId, "************ Client Off ************");
   });
 
   client.on('message', (message) => {
@@ -210,8 +229,7 @@ module.exports = {
   handleIncomingMessage,
   processSingleResult,
   parseOdds,
-  SOURCE_GROUP_IDS,
-  TARGET_GROUP_ID,
+  getConfig,
 };
 
 if (require.main === module) {

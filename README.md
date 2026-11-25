@@ -159,6 +159,20 @@ and your matched jobs, newest first. The UI has no authentication, so compose pu
 port on `127.0.0.1` only: it is **local-only**; don't expose it to a network. The QR code is
 rendered in your browser with `qrcodejs` loaded from cdnjs.
 
+### Using the web UI
+
+The same page edits your configuration, no container rebuild or restart needed:
+
+- **Settings:** pick source groups (listed once WhatsApp is connected) and the target group, set the
+  threshold (0–100), output language, LLM provider/model/base URL/key, outputs and their settings.
+  Saved values go to `data/settings.json` (gitignored, owner-readable) and override `.env`;
+  to go back to a `.env` value, edit or delete that file. Node re-reads the group settings every ~30 s.
+- **Secrets** (LLM API key, Telegram bot token, SMTP password) are never sent back to the browser;
+  the form only shows whether each is set. Leave a secret field blank to keep the current value.
+- **Profile:** upload your CV PDF and/or edit the job description; the profile reloads immediately
+  (a changed CV is re-cleaned by the LLM, which can take a moment).
+- The Google service-account key is still a file in `data/`; the form only takes its path.
+
 ## Running the tests locally (outside Docker)
 
 Python:

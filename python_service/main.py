@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 from typing import Literal
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 from pypdf import PdfReader
@@ -19,6 +19,7 @@ import requests
 from llm import complete_json, load_llm_client
 from prompts import CV_ORGANIZER, evaluation_prompt
 import outputs
+import settings
 from logger import setup_logger
 
 logger = setup_logger("job-agent")
@@ -270,8 +271,18 @@ def load_profile() -> None:
         logger.info("Profile mode: %s", mode)
 
 
+def reload_settings() -> None:
+    """Apply data/settings.json over the env and rebuild what was derived from it."""
+    global OUTPUT_LANGUAGE, llm_client
+    settings.apply(DATA_DIR)
+    OUTPUT_LANGUAGE = os.environ.get("OUTPUT_LANGUAGE") or "English"
+    llm_client = load_llm_client()
+
+
 @asynccontextmanager
 async def lifespan(app):
+    if settings.load(DATA_DIR):  # only then: otherwise keep the import-time client/env untouched
+        reload_settings()
     load_profile()
     outputs.warn_missing_config()
     yield
@@ -311,6 +322,73 @@ def api_status() -> dict:
 @app.get("/api/jobs")
 def api_jobs() -> list:
     return outputs.read_matches(DATA_DIR)
+
+@app.get("/api/config")
+def api_config() -> dict:
+    """The few settings Node needs; no secrets."""
+    split = lambda v: [x.strip() for x in v.split(",") if x.strip()]
+    return {
+        "sourceGroupIds": split(os.environ.get("SOURCE_GROUP_IDS", "")),
+        "targetGroupId": os.environ.get("TARGET_GROUP_ID", ""),
+        "outputs": [o.lower() for o in split(os.environ.get("OUTPUTS") or "whatsapp")],
+    }
+
+@app.get("/api/settings")
+def get_settings() -> dict:
+    return settings.public()
+
+@app.put("/api/settings")
+def put_settings(patch: dict) -> dict:
+    try:
+        settings.save(DATA_DIR, patch)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    with llm_lock:
+        reload_settings()
+    return settings.public()
+
+MAX_CV_BYTES = 10 * 1024 * 1024
+
+def profile_info() -> dict:
+    return {
+        "mode": profile_mode(CV_TEXT, JD_TEXT),
+        "has_cv": os.path.exists(os.path.join(profile_dir(), "cv.pdf")),
+        "job_description": load_job_description(),
+    }
+
+@app.get("/api/profile")
+def get_profile() -> dict:
+    return profile_info()
+
+@app.post("/api/profile/cv")
+async def upload_cv(request: Request) -> dict:
+    """Raw PDF body (no multipart dependency)."""
+    data = await request.body()
+    if not data.startswith(b"%PDF") or len(data) > MAX_CV_BYTES:
+        raise HTTPException(422, "Upload a PDF under 10 MB")
+    os.makedirs(profile_dir(), exist_ok=True)
+    with open(os.path.join(profile_dir(), "cv.pdf"), "wb") as f:
+        f.write(data)
+    with llm_lock:  # cleaning the CV calls the LLM
+        load_profile()
+    return profile_info()
+
+class JobDescription(BaseModel):
+    text: str
+
+@app.put("/api/profile/job-description")
+def put_job_description(jd: JobDescription) -> dict:
+    os.makedirs(profile_dir(), exist_ok=True)
+    for name in ("job_description.md", "job_description.txt"):
+        path = os.path.join(profile_dir(), name)
+        if os.path.exists(path):
+            os.remove(path)
+    if jd.text.strip():
+        with open(os.path.join(profile_dir(), "job_description.md"), "w", encoding="utf-8") as f:
+            f.write(jd.text.strip())
+    with llm_lock:
+        load_profile()
+    return profile_info()
 
 @app.get("/")
 def index():

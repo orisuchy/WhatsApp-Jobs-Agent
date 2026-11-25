@@ -1,0 +1,109 @@
+"""Effective config = process env (.env) overridden by data/settings.json, which the web UI writes.
+
+Overrides are applied onto os.environ so every module that reads env sees them without a restart.
+"""
+import json
+import os
+
+from logger import setup_logger
+
+logger = setup_logger("job-agent.settings")
+
+KEYS = (
+    "SOURCE_GROUP_IDS", "TARGET_GROUP_ID", "MATCH_THRESHOLD", "OUTPUT_LANGUAGE", "OUTPUTS",
+    "LLM_PROVIDER", "LLM_MODEL", "LLM_BASE_URL", "LLM_API_KEY",
+    "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
+    "SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "EMAIL_FROM", "EMAIL_TO",
+    "GOOGLE_SERVICE_ACCOUNT_FILE", "GOOGLE_SHEET_ID", "GOOGLE_SHEET_TAB",
+)
+SECRETS = ("LLM_API_KEY", "TELEGRAM_BOT_TOKEN", "SMTP_PASSWORD")
+PROVIDERS = ("ollama", "openai")
+OUTPUT_NAMES = ("whatsapp", "file", "telegram", "email", "sheets")
+
+_orig: dict[str, str | None] = {}  # env value each overridden key had before the first override
+
+
+def _path(data_dir: str) -> str:
+    return os.path.join(data_dir, "settings.json")
+
+
+def load(data_dir: str) -> dict[str, str]:
+    try:
+        with open(_path(data_dir), encoding="utf-8") as f:
+            data = json.load(f)
+        return {k: str(v) for k, v in data.items() if k in KEYS}
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError, AttributeError):
+        logger.exception("Ignoring unreadable settings file")
+        return {}
+
+
+def apply(data_dir: str) -> None:
+    """Put the saved overrides into os.environ (restoring the .env value for keys no longer overridden)."""
+    overrides = load(data_dir)
+    for k in KEYS:
+        if k in overrides:
+            _orig.setdefault(k, os.environ.get(k))
+            os.environ[k] = overrides[k]
+        elif k in _orig:
+            old = _orig.pop(k)
+            if old is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = old
+
+
+def validate(patch: dict) -> dict[str, str]:
+    """Normalise a PUT body to {KEY: str}; raises ValueError with a user-facing message."""
+    out = {}
+    for k, v in patch.items():
+        if k not in KEYS:
+            raise ValueError(f"Unknown setting {k!r}")
+        if isinstance(v, list):
+            v = ",".join(str(x).strip() for x in v if str(x).strip())
+        out[k] = "" if v is None else str(v).strip()
+    if out.get("MATCH_THRESHOLD"):  # empty = fall back to the default
+        try:
+            ok = 0 <= int(out["MATCH_THRESHOLD"]) <= 100
+        except ValueError:
+            ok = False
+        if not ok:
+            raise ValueError("MATCH_THRESHOLD must be an integer 0-100")
+    if "LLM_PROVIDER" in out:
+        out["LLM_PROVIDER"] = out["LLM_PROVIDER"].lower()
+        if out["LLM_PROVIDER"] not in PROVIDERS:
+            raise ValueError(f"LLM_PROVIDER must be one of {', '.join(PROVIDERS)}")
+    if "OUTPUTS" in out:
+        out["OUTPUTS"] = out["OUTPUTS"].lower()
+        names = [n.strip() for n in out["OUTPUTS"].split(",") if n.strip()]
+        bad = [n for n in names if n not in OUTPUT_NAMES]
+        if bad:
+            raise ValueError(f"Unknown output(s): {', '.join(bad)}")
+        out["OUTPUTS"] = ",".join(names)
+    if "SMTP_PORT" in out and out["SMTP_PORT"] and not out["SMTP_PORT"].isdigit():
+        raise ValueError("SMTP_PORT must be a number")
+    return out
+
+
+def save(data_dir: str, patch: dict) -> None:
+    """Validate, merge into the settings file (empty secret = keep current), and apply."""
+    clean = validate(patch)
+    current = load(data_dir)
+    for k, v in clean.items():
+        if k in SECRETS and not v:
+            continue
+        current[k] = v
+    os.makedirs(data_dir, exist_ok=True)
+    tmp = _path(data_dir) + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(current, f, indent=2)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, _path(data_dir))
+    apply(data_dir)
+
+
+def public() -> dict:
+    """Effective settings for the UI: secrets are reported only as set/unset."""
+    values = {k: os.environ.get(k, "") for k in KEYS if k not in SECRETS}
+    return {"values": values, "secrets_set": {k: bool(os.environ.get(k)) for k in SECRETS}}

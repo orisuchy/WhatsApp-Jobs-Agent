@@ -12,6 +12,8 @@
   #qr { margin: 1rem 0; }
   .job { border: 1px solid #ddd; border-radius: 8px; padding: .8rem 1rem; margin: .8rem 0; }
   .job h3 { margin: 0 0 .3rem; } .meta { color: #666; font-size: 13px; }
+  fieldset { margin: .8rem 0; } label { display: block; margin: .3rem 0; } label.f input:not([type=checkbox]), label.f select { display: block; width: 100%; box-sizing: border-box; }
+  textarea { width: 100%; min-height: 8rem; box-sizing: border-box; } #msg { margin-left: .5rem; }
   pre { white-space: pre-wrap; background: #f6f6f6; padding: .5rem; border-radius: 6px; }
 </style>
 </head>
@@ -19,6 +21,14 @@
 <h1>Job Agent</h1>
 <p>WhatsApp: <span id="status">…</span> <span id="groups" class="meta"></span></p>
 <div id="qr"></div>
+<h2>Settings</h2>
+<form id="settings"></form>
+<h2>Profile</h2>
+<p class="meta" id="profile-mode"></p>
+<p><label>CV (PDF): <input type="file" id="cv" accept="application/pdf"></label>
+<button id="cv-save" type="button">Upload CV</button></p>
+<textarea id="jd" placeholder="Describe the job you are looking for"></textarea>
+<p><button id="jd-save" type="button">Save job description</button></p>
 <h2>Matched jobs</h2>
 <div id="jobs"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSQX0FslNhTDadL4O5SAGapGt4FodqL8My0mA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -42,7 +52,7 @@ async function refresh() {
     const jobs = await (await fetch('/api/jobs')).json();
     document.getElementById('jobs').replaceChildren(...jobs.map((j) => {
       const d = el('div', '', 'job');
-      d.append(el('h3', `${j.score}% — ${j.company}`),
+      d.append(el('h3', `${j.score == null ? '—' : j.score + '%'} — ${j.company || 'Unknown'}`),
         el('div', `${j.timestamp} · ${j.group || 'no group'}`, 'meta'),
         el('p', j.summary), el('p', 'Why: ' + j.reason), el('pre', j.text));
       if (j.url && /^https?:\/\//.test(j.url)) {
@@ -53,6 +63,80 @@ async function refresh() {
   } catch (e) { /* keep last job list */ }
 }
 refresh(); setInterval(refresh, 5000);
+
+// --- Settings & profile ---
+const TEXT = [['MATCH_THRESHOLD', 'Threshold (0-100)'], ['OUTPUT_LANGUAGE', 'Output language'], ['LLM_MODEL', 'LLM model'], ['LLM_BASE_URL', 'LLM base URL'],
+  ['TELEGRAM_CHAT_ID', 'Telegram chat id'], ['SMTP_HOST', 'SMTP host'], ['SMTP_PORT', 'SMTP port'], ['SMTP_USER', 'SMTP user'], ['EMAIL_FROM', 'Email from'], ['EMAIL_TO', 'Email to'],
+  ['GOOGLE_SERVICE_ACCOUNT_FILE', 'Sheets service-account file'], ['GOOGLE_SHEET_ID', 'Sheet id'], ['GOOGLE_SHEET_TAB', 'Sheet tab']];
+const SECRET = [['LLM_API_KEY', 'LLM API key'], ['TELEGRAM_BOT_TOKEN', 'Telegram bot token'], ['SMTP_PASSWORD', 'SMTP password']];
+const SECRET_SET = Object.fromEntries(SECRET.map(([k]) => [k, 1]));
+const OUTPUTS = ['whatsapp', 'file', 'telegram', 'email', 'sheets'];
+const form = document.getElementById('settings');
+const note = (t) => { document.getElementById('msg').textContent = t; };
+const field = (label, input) => { const l = el('label', label + ' ', 'f'); l.append(input); return l; };
+const input = (name, type, value) => { const i = document.createElement('input'); i.name = name; i.type = type; i.value = value || ''; return i; };
+const picks = (name, items, chosen) => items.map(([v, text]) => {
+  const l = el('label', ' ' + text); const c = input(name, 'checkbox', v); c.checked = chosen.includes(v); l.prepend(c); return l; });
+
+let initial = {};
+async function loadSettings() {
+  const { values, secrets_set } = await (await fetch('/api/settings')).json();
+  initial = values;
+  const groups = (await (await fetch('/api/status')).json()).groups;
+  const list = (v) => (v || '').split(',').filter(Boolean);
+  const gs = groups.map((g) => [g.jid, g.name]);
+  for (const id of list(values.SOURCE_GROUP_IDS)) if (!gs.some(([j]) => j === id)) gs.push([id, id]);
+  const src = el('fieldset'); src.append(el('legend', 'Source groups'), ...picks('SOURCE_GROUP_IDS', gs, list(values.SOURCE_GROUP_IDS)));
+  const target = document.createElement('select'); target.name = 'TARGET_GROUP_ID';
+  for (const [j, n] of [['', '(none)'], ...gs]) { const o = el('option', n); o.value = j; o.selected = j === values.TARGET_GROUP_ID; target.append(o); }
+  const prov = document.createElement('select'); prov.name = 'LLM_PROVIDER';
+  for (const p of ['ollama', 'openai']) { const o = el('option', p); o.value = p; o.selected = p === (values.LLM_PROVIDER || 'ollama'); prov.append(o); }
+  const outs = el('fieldset'); outs.append(el('legend', 'Outputs'), ...picks('OUTPUTS', OUTPUTS.map((o) => [o, o]), list(values.OUTPUTS || 'whatsapp')));
+  const save = el('button', 'Save settings'); save.type = 'submit';
+  form.replaceChildren(src, field('Target group', target), field('LLM provider', prov),
+    ...TEXT.map(([k, l]) => field(l, input(k, 'text', values[k]))),
+    ...SECRET.map(([k, l]) => { const i = input(k, 'password', ''); i.placeholder = secrets_set[k] ? '(set — leave blank to keep)' : '(not set)'; i.autocomplete = 'off'; return field(l, i); }),
+    outs, save, el('span', '', 'meta'));
+  form.lastChild.id = 'msg';
+}
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const all = {};
+  for (const n of ['SOURCE_GROUP_IDS', 'OUTPUTS']) all[n] = [...form.querySelectorAll(`[name=${n}]:checked`)].map((c) => c.value).join(',');
+  for (const [k] of [...TEXT, ...SECRET]) all[k] = form.elements[k].value;
+  all.TARGET_GROUP_ID = form.elements.TARGET_GROUP_ID.value; all.LLM_PROVIDER = form.elements.LLM_PROVIDER.value;
+  // send only what changed, so untouched fields never override .env with blanks
+  const body = Object.fromEntries(Object.entries(all).filter(([k, v]) => v !== (initial[k] ?? '') && !(k in SECRET_SET && !v)));
+  const r = await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  note(r.ok ? 'Saved' : 'Error: ' + (await r.json().catch(() => ({}))).detail);
+  if (r.ok) loadSettings().then(() => note('Saved'));
+});
+
+function showProfile(p) {
+  document.getElementById('profile-mode').textContent = `Profile mode: ${p.mode}${p.has_cv ? ' (CV uploaded)' : ''}`;
+  document.getElementById('jd').value = p.job_description;
+}
+async function profileCall(url, opts, btn) {
+  btn.disabled = true;
+  try {
+    const r = await fetch(url, opts);
+    if (r.ok) showProfile(await r.json()); else alert((await r.json()).detail);
+  } finally { btn.disabled = false; }
+}
+document.getElementById('cv-save').onclick = (e) => {
+  const f = document.getElementById('cv').files[0];
+  if (f) profileCall('/api/profile/cv', { method: 'POST', headers: { 'Content-Type': 'application/pdf' }, body: f }, e.target);
+};
+document.getElementById('jd-save').onclick = (e) => profileCall('/api/profile/job-description',
+  { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: document.getElementById('jd').value }) }, e.target);
+fetch('/api/profile').then((r) => r.json()).then(showProfile);
+// groups arrive after WhatsApp connects: reload the form once, unless the user is editing
+let groupsSeen = 0;
+async function syncGroups() {
+  const n = (await (await fetch('/api/status')).json()).groups.length;
+  if (n !== groupsSeen && !form.contains(document.activeElement)) { groupsSeen = n; loadSettings(); }
+}
+syncGroups(); setInterval(syncGroups, 5000);
 </script>
 </body>
 </html>

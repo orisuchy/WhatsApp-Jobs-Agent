@@ -35,8 +35,10 @@ const {
   getConfig,
 } = require('./whatsapp-agent');
 
-const firstSourceGroupId = getConfig().sourceGroupIds[0];
-const TARGET_GROUP_ID = getConfig().targetGroupId;
+// By default Python is "unreachable", so getConfig falls back to the env set above.
+axios.get = async () => { throw new Error('no python'); };
+const firstSourceGroupId = 'src1@g.us';
+const TARGET_GROUP_ID = 'target@g.us';
 
 test('handleIncomingMessage ignores messages from non-source groups', async (t) => {
   const postMock = t.mock.method(axios, 'post', async () => ({ data: {} }));
@@ -185,4 +187,27 @@ test('state pushes are delivered in order even when an earlier one is slow', asy
   pushState({ status: 'qr' });
   await pushState({ status: 'ready' });
   assert.deepEqual(order, ['qr', 'ready']);
+});
+
+test('getConfig falls back to env when Python is unreachable', async () => {
+  const cfg = await getConfig();
+  assert.deepEqual(cfg.sourceGroupIds, ['src1@g.us', 'src2@g.us']);
+  assert.equal(cfg.targetGroupId, 'target@g.us');
+});
+
+test('getConfig fetches Python config, caches it, and picks up changes after the TTL', async (t) => {
+  const { resetConfigCache } = require('./whatsapp-agent');
+  let groups = ['new1@g.us'];
+  const getMock = t.mock.method(axios, 'get', async () => ({
+    data: { sourceGroupIds: groups, targetGroupId: 'T', outputs: ['whatsapp'] },
+  }));
+  t.mock.timers.enable({ apis: ['Date'], now: 1000 });
+  resetConfigCache();
+  assert.deepEqual((await getConfig()).sourceGroupIds, ['new1@g.us']);
+  groups = ['new2@g.us'];
+  assert.deepEqual((await getConfig()).sourceGroupIds, ['new1@g.us']); // cached
+  assert.equal(getMock.mock.callCount(), 1);
+  t.mock.timers.tick(31000);
+  assert.deepEqual((await getConfig()).sourceGroupIds, ['new2@g.us']); // TTL expired
+  resetConfigCache();
 });

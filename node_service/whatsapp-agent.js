@@ -57,26 +57,37 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const axios = require('axios');
 
-// Single access point for configuration (read on every call so it can be swapped later).
-function getConfig() {
-  return {
-    sourceGroupIds: (process.env.SOURCE_GROUP_IDS || '')
-      .split(',')
-      .map((id) => id.trim())
-      .filter(Boolean),
-    targetGroupId: process.env.TARGET_GROUP_ID || '',
-    outputs: (process.env.OUTPUTS || 'whatsapp')
-      .split(',')
-      .map((o) => o.trim().toLowerCase())
-      .filter(Boolean),
-  };
-}
-
 const ANALYZE_URL = process.env.ANALYZE_URL || 'http://python-backend:8000/analyze';
 const parsedTimeout = parseInt(process.env.ANALYZE_TIMEOUT_MS, 10);
 const ANALYZE_TIMEOUT_MS = parsedTimeout > 0 ? parsedTimeout : 180000;
 
 const STATE_URL = process.env.STATE_URL || ANALYZE_URL.replace(/\/analyze$/, '/state');
+const CONFIG_URL = process.env.CONFIG_URL || ANALYZE_URL.replace(/\/analyze$/, '/api/config');
+const CONFIG_TTL_MS = 30000;
+
+function envConfig() {
+  return {
+    sourceGroupIds: (process.env.SOURCE_GROUP_IDS || '').split(',').map((id) => id.trim()).filter(Boolean),
+    targetGroupId: process.env.TARGET_GROUP_ID || '',
+    outputs: (process.env.OUTPUTS || 'whatsapp').split(',').map((o) => o.trim().toLowerCase()).filter(Boolean),
+  };
+}
+
+// Single access point for configuration: Python's effective config (env + UI settings), cached
+// briefly; falls back to env when Python is unreachable.
+let configCache = { at: 0, value: null };
+async function getConfig() {
+  if (configCache.value && Date.now() - configCache.at < CONFIG_TTL_MS) return configCache.value;
+  try {
+    const { data } = await axios.get(CONFIG_URL, { timeout: 5000 });
+    configCache = { at: Date.now(), value: data };
+  } catch (err) {
+    log_error('Could not fetch config from Python, using env: ' + err.message);
+    return envConfig();
+  }
+  return configCache.value;
+}
+
 const uiState = { status: 'initializing', qr: null, groups: [] };
 
 // Push our state to Python for the web UI; never let a UI failure affect the agent.
@@ -113,7 +124,7 @@ function registerStateEvents(client) {
 }
 
 async function handleIncomingMessage(client, message) {
-  if (!isFromSourceGroup(message.from, getConfig().sourceGroupIds)) {
+  if (!isFromSourceGroup(message.from, (await getConfig()).sourceGroupIds)) {
     log_info(`Ignoring message from ${message.from} (not in source group)`);
     return;
   }
@@ -147,7 +158,7 @@ async function processSingleResult(client, result, message) {
     log_info(`Message not sent - no match or duplicate. Text: ${message.body.substring(0, 100)}`);
     return;
   }
-  const { outputs, targetGroupId } = getConfig();
+  const { outputs, targetGroupId } = await getConfig();
   if (!outputs.includes('whatsapp')) return;
   await client.sendMessage(targetGroupId, result.whatsapp_text);
 }
@@ -179,7 +190,7 @@ function start() {
     qrcode.generate(qr, { small: true });
   });
 
-  client.on('ready', () => {
+  client.on('ready', async () => {
     log_info('WhatsApp client ready.');
     if (process.env.LIST_GROUPS === '1') {
       listGroups(client)
@@ -187,16 +198,16 @@ function start() {
         .finally(() => process.exit(0));
       return;
     }
-    client.sendMessage(getConfig().targetGroupId, `************ ${getTimestamp()} Client on - Collecting data ************`);
+    client.sendMessage((await getConfig()).targetGroupId, `************ ${getTimestamp()} Client on - Collecting data ************`);
   });
 
   client.on('auth_failure', (msg) => {
     log_error('Authentication failure: ' + msg);
   });
 
-  client.on('disconnected', () => {
+  client.on('disconnected', async () => {
     log_info('WhatsApp client disconnected.');
-    client.sendMessage(getConfig().targetGroupId, "************ Client Off ************");
+    client.sendMessage((await getConfig()).targetGroupId, "************ Client Off ************");
   });
 
   client.on('message', (message) => {
@@ -217,6 +228,7 @@ module.exports = {
   handleIncomingMessage,
   processSingleResult,
   getConfig,
+  resetConfigCache: () => { configCache = { at: 0, value: null }; },
   pushState,
   registerStateEvents,
 };

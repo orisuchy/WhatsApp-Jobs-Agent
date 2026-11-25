@@ -275,3 +275,59 @@ def test_state_rejects_unknown_status_and_corrupt_jobs_line_is_skipped(monkeypat
     with TestClient(main.app) as c:
         assert c.post("/state", json={"status": "bogus"}).status_code == 422
         assert [j["company"] for j in c.get("/api/jobs").json()] == ["A"]
+
+
+# --- settings / profile (ticket 10) -------------------------------------------
+
+def test_settings_override_env_and_mask_secrets(monkeypatch, tmp_path):
+    monkeypatch.setenv("MATCH_THRESHOLD", "70")
+    monkeypatch.setenv("LLM_API_KEY", "sk-env")
+    with TestClient(main.app) as c:
+        r = c.put("/api/settings", json={"MATCH_THRESHOLD": "55", "TELEGRAM_BOT_TOKEN": "tok-secret", "SOURCE_GROUP_IDS": ["a@g.us", "b@g.us"]})
+        assert r.status_code == 200
+        body = c.get("/api/settings").json()
+        assert body["values"]["MATCH_THRESHOLD"] == "55"
+        assert body["values"]["SOURCE_GROUP_IDS"] == "a@g.us,b@g.us"
+        assert body["secrets_set"] == {"LLM_API_KEY": True, "TELEGRAM_BOT_TOKEN": True, "SMTP_PASSWORD": False}
+        assert "tok-secret" not in c.get("/api/settings").text and "sk-env" not in c.get("/api/settings").text
+        assert c.get("/api/config").json()["sourceGroupIds"] == ["a@g.us", "b@g.us"]
+    assert os.environ["MATCH_THRESHOLD"] == "55"  # applied without restart
+    assert (tmp_path / "settings.json").exists()
+
+
+def test_empty_secret_keeps_current_value(tmp_path):
+    with TestClient(main.app) as c:
+        c.put("/api/settings", json={"SMTP_PASSWORD": "pw1"})
+        c.put("/api/settings", json={"SMTP_PASSWORD": "", "SMTP_HOST": "h"})
+        assert os.environ["SMTP_PASSWORD"] == "pw1"
+        assert c.get("/api/settings").json()["values"]["SMTP_HOST"] == "h"
+
+
+def test_settings_validation(tmp_path):
+    with TestClient(main.app) as c:
+        for bad in ({"MATCH_THRESHOLD": "101"}, {"MATCH_THRESHOLD": "x"}, {"OUTPUTS": "whatsapp,fax"},
+                    {"LLM_PROVIDER": "bogus"}, {"NOPE": "1"}):
+            assert c.put("/api/settings", json=bad).status_code == 422, bad
+        assert not (tmp_path / "settings.json").exists()
+
+
+def test_saved_settings_apply_on_startup(monkeypatch, tmp_path):
+    (tmp_path / "settings.json").write_text(json.dumps({"TARGET_GROUP_ID": "t@g.us", "OUTPUT_LANGUAGE": "Hebrew"}))
+    monkeypatch.setenv("TARGET_GROUP_ID", "env")
+    with TestClient(main.app) as c:
+        assert c.get("/api/config").json()["targetGroupId"] == "t@g.us"
+    assert main.OUTPUT_LANGUAGE == "Hebrew"
+
+
+def test_profile_upload_and_job_description_change_mode(monkeypatch, tmp_path):
+    client = MagicMock()
+    client.complete.return_value = "cleaned cv"
+    monkeypatch.setattr(main, "llm_client", client)
+    pdf = open(os.path.join(os.path.dirname(__file__), "fixtures", "sample_cv.pdf"), "rb").read()
+    with TestClient(main.app) as c:
+        assert c.get("/api/profile").json()["mode"] == "none"
+        assert c.post("/api/profile/cv", content=b"not a pdf").status_code == 422
+        assert c.post("/api/profile/cv", content=pdf).json()["mode"] == "cv"
+        r = c.put("/api/profile/job-description", json={"text": "Senior Python"}).json()
+        assert r["mode"] == "both" and r["job_description"] == "Senior Python"
+        assert c.put("/api/profile/job-description", json={"text": "  "}).json()["mode"] == "cv"

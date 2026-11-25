@@ -35,6 +35,8 @@
 <script>
 const el = (tag, text, cls) => { const e = document.createElement(tag); e.textContent = text; if (cls) e.className = cls; return e; };
 let lastQr = null;
+// groups arrive after WhatsApp connects: refresh() re-renders settings when the count changes (-1 = render once at start)
+let groupsSeen = -1;
 
 async function refresh() {
   try {
@@ -42,6 +44,7 @@ async function refresh() {
     const st = document.getElementById('status');
     st.textContent = s.status; st.className = s.status;
     document.getElementById('groups').textContent = s.groups.length ? `(${s.groups.length} groups)` : '';
+    if (s.groups.length !== groupsSeen && !form.contains(document.activeElement)) { groupsSeen = s.groups.length; loadSettings(); }
     const qr = document.getElementById('qr');
     if (s.qr !== lastQr) {
       lastQr = s.qr; qr.replaceChildren();
@@ -62,7 +65,6 @@ async function refresh() {
     }));
   } catch (e) { /* keep last job list */ }
 }
-refresh(); setInterval(refresh, 5000);
 
 // --- Settings & profile ---
 const TEXT = [['MATCH_THRESHOLD', 'Threshold (0-100)'], ['OUTPUT_LANGUAGE', 'Output language'], ['LLM_MODEL', 'LLM model'], ['LLM_BASE_URL', 'LLM base URL'],
@@ -130,13 +132,7 @@ document.getElementById('cv-save').onclick = (e) => {
 document.getElementById('jd-save').onclick = (e) => profileCall('/api/profile/job-description',
   { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: document.getElementById('jd').value }) }, e.target);
 fetch('/api/profile').then((r) => r.json()).then(showProfile);
-// groups arrive after WhatsApp connects: reload the form once, unless the user is editing
-let groupsSeen = -1; // -1 so the form renders even before any groups arrive
-async function syncGroups() {
-  const n = (await (await fetch('/api/status')).json()).groups.length;
-  if (n !== groupsSeen && !form.contains(document.activeElement)) { groupsSeen = n; loadSettings(); }
-}
-syncGroups(); setInterval(syncGroups, 5000);
+refresh(); setInterval(refresh, 5000);
 </script>
 </body>
 </html>

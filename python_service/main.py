@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import os
 import re
 import ipaddress
@@ -24,6 +25,12 @@ import settings
 from logger import setup_logger
 
 logger = setup_logger("job-agent")
+
+# The web UI polls these every few seconds, and Node re-sends its state every 30 s; keep them out of the access log.
+POLLED_PATHS = ('"GET /api/status ', '"GET /api/jobs ', '"POST /state ')
+logging.getLogger("uvicorn.access").addFilter(
+    lambda record: not any(p in record.getMessage() for p in POLLED_PATHS)
+)
 
 
 class JobMatchingResult(BaseModel):

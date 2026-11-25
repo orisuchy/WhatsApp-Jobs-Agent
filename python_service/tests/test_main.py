@@ -346,3 +346,13 @@ def test_unreadable_pdf_keeps_old_cv(monkeypatch, tmp_path):
     with TestClient(main.app) as c:
         assert c.post("/api/profile/cv", content=b"%PDF-garbage").status_code == 422
     assert (tmp_path / "profile" / "cv.pdf").read_bytes() == b"%PDF-old"
+
+
+def test_access_log_hides_ui_polling():
+    import logging
+    log = logging.getLogger("uvicorn.access")
+    rec = lambda path: logging.LogRecord("uvicorn.access", logging.INFO, "", 0,
+                                         '%s - "%s %s HTTP/1.1" %d', ("1.2.3.4", "GET", path, 200), None)
+    assert not log.filter(rec("/api/status"))
+    assert not log.filter(rec("/api/jobs"))
+    assert log.filter(rec("/api/settings"))

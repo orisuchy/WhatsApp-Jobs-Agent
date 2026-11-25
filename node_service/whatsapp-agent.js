@@ -207,6 +207,7 @@ function start() {
   const client = createClient();
   registerStateEvents(client);
   pushState({ status: 'initializing', qr: null }); // clears stale UI state after a Node restart
+  setInterval(() => pushState({}), 30000); // re-sync the UI state after a Python restart
 
   client.on('qr', (qr) => {
     log_info('QR code received, scan to authenticate');

@@ -152,6 +152,13 @@ it with WhatsApp's "Linked Devices" to authenticate. The session persists in
 the `whatsapp_session` Docker volume, so you won't need to re-scan on
 restart unless the volume is removed.
 
+## Web UI
+
+Open <http://localhost:8000> for WhatsApp status, the QR code to scan (when not connected),
+and your matched jobs, newest first. The UI has no authentication, so compose publishes the
+port on `127.0.0.1` only: it is **local-only**; don't expose it to a network. The QR code is
+rendered in your browser with `qrcodejs` loaded from cdnjs.
+
 ## Running the tests locally (outside Docker)
 
 Python:

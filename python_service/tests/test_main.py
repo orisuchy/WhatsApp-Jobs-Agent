@@ -248,3 +248,22 @@ def test_dispatcher_isolates_failing_destination(monkeypatch):
 def test_dedup_ignores_trailing_punctuation_on_url():
     import outputs
     assert outputs.job_key("apply: https://x.io/j/1.") == outputs.job_key("(https://x.io/j/1) hi")
+
+
+def test_ui_state_push_and_read():
+    with TestClient(main.app) as c:
+        state = {"status": "qr", "qr": "QR", "groups": [{"name": "G", "jid": "g@g.us"}]}
+        assert c.post("/state", json=state).status_code == 200
+        assert c.get("/api/status").json() == state
+
+
+def test_api_jobs_newest_first_and_page_served(monkeypatch, tmp_path):
+    monkeypatch.setattr(main, "DATA_DIR", str(tmp_path))
+    with TestClient(main.app) as c:
+        assert c.get("/api/jobs").json() == []
+        (tmp_path / "matches.jsonl").write_text(
+            json.dumps({"company": "Old"}) + "\n" + json.dumps({"company": "New"}) + "\n"
+        )
+        assert [j["company"] for j in c.get("/api/jobs").json()] == ["New", "Old"]
+        page = c.get("/")
+        assert page.status_code == 200 and "Job Agent" in page.text

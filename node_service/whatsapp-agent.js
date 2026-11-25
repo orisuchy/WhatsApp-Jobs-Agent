@@ -76,6 +76,36 @@ const ANALYZE_URL = process.env.ANALYZE_URL || 'http://python-backend:8000/analy
 const parsedTimeout = parseInt(process.env.ANALYZE_TIMEOUT_MS, 10);
 const ANALYZE_TIMEOUT_MS = parsedTimeout > 0 ? parsedTimeout : 180000;
 
+const STATE_URL = process.env.STATE_URL || ANALYZE_URL.replace(/\/analyze$/, '/state');
+const uiState = { status: 'initializing', qr: null, groups: [] };
+
+// Push our state to Python for the web UI; never let a UI failure affect the agent.
+async function pushState(patch) {
+  Object.assign(uiState, patch);
+  try {
+    await axios.post(STATE_URL, uiState, { timeout: 5000 });
+  } catch (err) {
+    log_error('Could not push state to Python: ' + err.message);
+  }
+}
+
+async function pushGroups(client) {
+  const chats = await client.getChats();
+  const groups = chats.filter((c) => c.isGroup).map((c) => ({ name: c.name, jid: c.id._serialized }));
+  await pushState({ groups });
+}
+
+// Mirrors client lifecycle events into the UI state.
+function registerStateEvents(client) {
+  client.on('qr', (qr) => pushState({ status: 'qr', qr }));
+  client.on('ready', () => {
+    pushState({ status: 'ready', qr: null });
+    pushGroups(client).catch((err) => log_error('Failed to push groups: ' + err.message));
+  });
+  client.on('auth_failure', () => pushState({ status: 'auth_failure', qr: null }));
+  client.on('disconnected', () => pushState({ status: 'disconnected', qr: null }));
+}
+
 async function handleIncomingMessage(client, message) {
   if (!isFromSourceGroup(message.from, getConfig().sourceGroupIds)) {
     log_info(`Ignoring message from ${message.from} (not in source group)`);
@@ -135,6 +165,7 @@ async function listGroups(client) {
 
 function start() {
   const client = createClient();
+  registerStateEvents(client);
 
   client.on('qr', (qr) => {
     log_info('QR code received, scan to authenticate');
@@ -179,6 +210,8 @@ module.exports = {
   handleIncomingMessage,
   processSingleResult,
   getConfig,
+  pushState,
+  registerStateEvents,
 };
 
 if (require.main === module) {

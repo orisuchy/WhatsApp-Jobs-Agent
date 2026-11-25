@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Job Agent</title>
+<style>
+  body { font: 15px/1.4 system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
+  #status { padding: .5rem .8rem; border-radius: 6px; background: #eee; display: inline-block; }
+  #status.ready { background: #c8f0cf; } #status.qr { background: #ffe9a8; }
+  #status.disconnected, #status.auth_failure { background: #f7c6c6; }
+  #qr { margin: 1rem 0; }
+  .job { border: 1px solid #ddd; border-radius: 8px; padding: .8rem 1rem; margin: .8rem 0; }
+  .job h3 { margin: 0 0 .3rem; } .meta { color: #666; font-size: 13px; }
+  pre { white-space: pre-wrap; background: #f6f6f6; padding: .5rem; border-radius: 6px; }
+</style>
+</head>
+<body>
+<h1>Job Agent</h1>
+<p>WhatsApp: <span id="status">…</span> <span id="groups" class="meta"></span></p>
+<div id="qr"></div>
+<h2>Matched jobs</h2>
+<div id="jobs"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+const el = (tag, text, cls) => { const e = document.createElement(tag); e.textContent = text; if (cls) e.className = cls; return e; };
+let lastQr = null;
+
+async function refresh() {
+  try {
+    const s = await (await fetch('/api/status')).json();
+    const st = document.getElementById('status');
+    st.textContent = s.status; st.className = s.status;
+    document.getElementById('groups').textContent = s.groups.length ? `(${s.groups.length} groups)` : '';
+    const qr = document.getElementById('qr');
+    if (s.qr !== lastQr) {
+      lastQr = s.qr; qr.replaceChildren();
+      if (s.qr && window.QRCode) new QRCode(qr, { text: s.qr, width: 256, height: 256 });
+    }
+    const jobs = await (await fetch('/api/jobs')).json();
+    document.getElementById('jobs').replaceChildren(...jobs.map((j) => {
+      const d = el('div', '', 'job');
+      d.append(el('h3', `${j.score}% — ${j.company}`),
+        el('div', `${j.timestamp} · ${j.group || 'no group'}`, 'meta'),
+        el('p', j.summary), el('p', 'Why: ' + j.reason), el('pre', j.text));
+      if (j.url && /^https?:\/\//.test(j.url)) {
+        const a = el('a', j.url); a.href = j.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; d.append(a);
+      }
+      return d;
+    }));
+  } catch (e) { document.getElementById('status').textContent = 'unreachable'; }
+}
+refresh(); setInterval(refresh, 5000);
+</script>
+</body>
+</html>

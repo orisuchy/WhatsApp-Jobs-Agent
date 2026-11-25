@@ -140,3 +140,35 @@ test('sends the ready text and passes the group name to Python', async (t) => {
   assert.deepEqual(sent, [{ to: TARGET_GROUP_ID, text: 'READY' }]);
   assert.equal(postMock.mock.calls[0].arguments[1].group, 'Runtime Group');
 });
+
+test('pushes qr then ready state (with groups) to Python', async (t) => {
+  const { registerStateEvents } = require('./whatsapp-agent');
+  const { EventEmitter } = require('node:events');
+  const bodies = [];
+  t.mock.method(axios, 'post', async (url, body) => {
+    assert.match(url, /\/state$/);
+    bodies.push(JSON.parse(JSON.stringify(body)));
+    return { data: {} };
+  });
+  const client = new EventEmitter();
+  client.getChats = async () => [
+    { isGroup: true, name: 'G1', id: { _serialized: 'g1@g.us' } },
+    { isGroup: false, name: 'Person', id: { _serialized: 'p@c.us' } },
+  ];
+  registerStateEvents(client);
+
+  client.emit('qr', 'QR-STRING');
+  client.emit('ready');
+  await new Promise((r) => setTimeout(r, 20));
+
+  assert.deepEqual(bodies[0], { status: 'qr', qr: 'QR-STRING', groups: [] });
+  assert.equal(bodies[1].status, 'ready');
+  assert.equal(bodies[1].qr, null);
+  assert.deepEqual(bodies.at(-1).groups, [{ name: 'G1', jid: 'g1@g.us' }]);
+});
+
+test('a failing state push does not throw', async (t) => {
+  const { pushState } = require('./whatsapp-agent');
+  t.mock.method(axios, 'post', async () => { throw new Error('down'); });
+  await pushState({ status: 'disconnected' });
+});

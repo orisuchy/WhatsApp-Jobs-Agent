@@ -118,6 +118,15 @@ def record_if_new(data_dir: str, job: dict) -> bool:
     return True
 
 
+def read_matches(data_dir: str) -> list[dict]:
+    """Matched jobs, newest first."""
+    path = os.path.join(data_dir, "matches.jsonl")
+    if not os.path.exists(path):
+        return []
+    with _lock, open(path, encoding="utf-8") as f:
+        # ponytail: whole file per poll; paginate/sqlite if it grows large
+        return [json.loads(line) for line in reversed(f.read().splitlines()) if line.strip()]
+
 def file_output(job: dict) -> None:
     out = os.environ.get("OUTPUT_DIR") or os.path.join(os.environ.get("DATA_DIR") or "data", "outputs")
     os.makedirs(out, exist_ok=True)

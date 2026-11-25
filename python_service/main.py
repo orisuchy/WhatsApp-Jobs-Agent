@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 from pypdf import PdfReader
 import requests
@@ -285,3 +286,30 @@ def analyze(posting: JobPosting) -> dict:
     with llm_lock:
         result = analyze_job_posting(posting.text, fetched_data, CV_TEXT, llm_client, company_name, JD_TEXT)
     return outputs.process_match(result, posting.text, posting.group, DATA_DIR, OUTPUT_LANGUAGE)
+
+
+# --- Web UI -----------------------------------------------------------------
+# Node pushes its WhatsApp state here; kept in memory only.
+ui_state = {"status": "initializing", "qr": None, "groups": []}
+
+class UiState(BaseModel):
+    status: str = "initializing"
+    qr: str | None = None
+    groups: list[dict] = []
+
+@app.post("/state")
+def push_state(state: UiState) -> dict:
+    ui_state.update(state.model_dump())
+    return {"ok": True}
+
+@app.get("/api/status")
+def api_status() -> dict:
+    return ui_state
+
+@app.get("/api/jobs")
+def api_jobs() -> list:
+    return outputs.read_matches(DATA_DIR)
+
+@app.get("/")
+def index():
+    return FileResponse(os.path.join(os.path.dirname(__file__), "static", "index.html"))

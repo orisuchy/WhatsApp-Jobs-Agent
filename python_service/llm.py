@@ -9,6 +9,7 @@ from logger import setup_logger
 logger = setup_logger("job-agent.llm")
 
 DEFAULT_MODEL = "gemma4:e2b"  # keep in sync with .env.example and README
+DEFAULT_TIMEOUT_S = 170
 DEFAULT_OLLAMA_URL = "http://host.docker.internal:11434"
 
 
@@ -74,7 +75,7 @@ class OpenAILLM:
 
 def load_llm_client(env=os.environ):
     provider = env.get("LLM_PROVIDER", "ollama").strip().lower()
-    timeout = float(env.get("LLM_TIMEOUT_S", 170))
+    timeout = float(env.get("LLM_TIMEOUT_S", DEFAULT_TIMEOUT_S))
     if provider == "ollama":
         return OllamaLLM(
             env.get("LLM_BASE_URL") or env.get("OLLAMA_URL") or DEFAULT_OLLAMA_URL,
@@ -95,6 +96,14 @@ def is_timeout(e: BaseException) -> bool:
     from openai import APITimeoutError
 
     return isinstance(e, (httpx.TimeoutException, APITimeoutError))
+
+
+def log_if_timeout(e: BaseException, env=os.environ) -> bool:
+    """Log the plain timeout hint and return True when e is an LLM timeout."""
+    if not is_timeout(e):
+        return False
+    logger.error("LLM timed out after %s s — raise LLM_TIMEOUT_S or use a smaller model", env.get("LLM_TIMEOUT_S", DEFAULT_TIMEOUT_S))
+    return True
 
 
 def parse_json_object(text: str) -> dict:

@@ -139,4 +139,5 @@ def test_is_timeout():
     from llm import is_timeout
 
     assert is_timeout(httpx.ReadTimeout("x"))
+    assert is_timeout(openai.APITimeoutError(request=httpx.Request("POST", "http://x")))
     assert not is_timeout(ValueError("x"))

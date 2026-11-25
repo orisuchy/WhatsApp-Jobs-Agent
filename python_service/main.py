@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field, field_validator
 from pypdf import PdfReader
 import requests
 
-from llm import complete_json, is_timeout, load_llm_client
+from llm import complete_json, load_llm_client, log_if_timeout
 from prompts import CV_ORGANIZER, evaluation_prompt
 import outputs
 import settings
@@ -174,8 +174,7 @@ def analyze_job_posting(posting_text: str, fetched_data: str, cv_text: str, clie
         )
         return result or {"odds": 0}
     except Exception as e:
-        if is_timeout(e):
-            logger.error("LLM timed out after %s s — raise LLM_TIMEOUT_S or use a smaller model", os.environ.get("LLM_TIMEOUT_S", 170))
+        if log_if_timeout(e):
             return {"odds": 0}
         logger.exception("analyze_job_posting failed")
         return {"odds": 0}
@@ -248,8 +247,9 @@ def load_cv() -> str:
         logger.info("Loaded raw CV text (%d chars) from %s", len(raw), pdf)
         try:
             cleaned = clean_cv(raw, llm_client)
-        except Exception:
-            logger.exception("Failed to clean CV text, using raw text (not cached)")
+        except Exception as e:
+            if not log_if_timeout(e):
+                logger.exception("Failed to clean CV text, using raw text (not cached)")
             return raw
         with open(cache, "w", encoding="utf-8") as f:
             f.write(cleaned)

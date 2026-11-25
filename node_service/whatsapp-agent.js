@@ -64,6 +64,7 @@ const ANALYZE_TIMEOUT_MS = parsedTimeout > 0 ? parsedTimeout : 180000;
 const STATE_URL = process.env.STATE_URL || ANALYZE_URL.replace(/\/analyze$/, '/state');
 const CONFIG_URL = process.env.CONFIG_URL || ANALYZE_URL.replace(/\/analyze$/, '/api/config');
 const CONFIG_TTL_MS = 30000;
+const CONFIG_FALLBACK_TTL_MS = 5000;
 
 function envConfig() {
   return {
@@ -75,15 +76,16 @@ function envConfig() {
 
 // Single access point for configuration: Python's effective config (env + UI settings), cached
 // briefly; falls back to env when Python is unreachable.
-let configCache = { at: 0, value: null };
+let configCache = { at: 0, value: null, ttl: CONFIG_TTL_MS };
 async function getConfig() {
-  if (configCache.value && Date.now() - configCache.at < CONFIG_TTL_MS) return configCache.value;
+  if (configCache.value && Date.now() - configCache.at < configCache.ttl) return configCache.value;
   try {
     const { data } = await axios.get(CONFIG_URL, { timeout: 5000 });
-    configCache = { at: Date.now(), value: data };
+    configCache = { at: Date.now(), value: data, ttl: CONFIG_TTL_MS };
   } catch (err) {
     log_error('Could not fetch config from Python, using env: ' + err.message);
-    return envConfig();
+    // keep the last good config (else env) briefly so a down Python doesn't add its timeout to every message
+    configCache = { at: Date.now(), value: configCache.value || envConfig(), ttl: CONFIG_FALLBACK_TTL_MS };
   }
   return configCache.value;
 }
@@ -228,7 +230,7 @@ module.exports = {
   handleIncomingMessage,
   processSingleResult,
   getConfig,
-  resetConfigCache: () => { configCache = { at: 0, value: null }; },
+  resetConfigCache: () => { configCache = { at: 0, value: null, ttl: CONFIG_TTL_MS }; },
   pushState,
   registerStateEvents,
 };

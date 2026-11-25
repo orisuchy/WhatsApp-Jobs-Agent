@@ -121,11 +121,13 @@ test('does not send to WhatsApp when whatsapp is not in OUTPUTS', async (t) => {
   t.mock.method(axios, 'post', async () => ({ data: { forward: true, whatsapp_text: 'hi' } }));
   const sent = [];
   const fakeClient = { sendMessage: async (to, text) => sent.push({ to, text }) };
+  require('./whatsapp-agent').resetConfigCache();
   process.env.OUTPUTS = 'file';
   try {
     await handleIncomingMessage(fakeClient, { from: firstSourceGroupId, body: 'דרוש מפתח' });
   } finally {
     delete process.env.OUTPUTS;
+    require('./whatsapp-agent').resetConfigCache();
   }
   assert.equal(sent.length, 0);
 });
@@ -190,6 +192,7 @@ test('state pushes are delivered in order even when an earlier one is slow', asy
 });
 
 test('getConfig falls back to env when Python is unreachable', async () => {
+  require('./whatsapp-agent').resetConfigCache();
   const cfg = await getConfig();
   assert.deepEqual(cfg.sourceGroupIds, ['src1@g.us', 'src2@g.us']);
   assert.equal(cfg.targetGroupId, 'target@g.us');

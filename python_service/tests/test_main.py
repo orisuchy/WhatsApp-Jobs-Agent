@@ -331,3 +331,18 @@ def test_profile_upload_and_job_description_change_mode(monkeypatch, tmp_path):
         r = c.put("/api/profile/job-description", json={"text": "Senior Python"}).json()
         assert r["mode"] == "both" and r["job_description"] == "Senior Python"
         assert c.put("/api/profile/job-description", json={"text": "  "}).json()["mode"] == "cv"
+
+
+def test_corrupt_settings_file_is_kept_not_overwritten(tmp_path):
+    (tmp_path / "settings.json").write_text("{broken")
+    with TestClient(main.app) as c:
+        assert c.put("/api/settings", json={"TARGET_GROUP_ID": "t"}).status_code == 200
+    assert (tmp_path / "settings.json.corrupt").read_text() == "{broken"
+
+
+def test_unreadable_pdf_keeps_old_cv(monkeypatch, tmp_path):
+    (tmp_path / "profile").mkdir()
+    (tmp_path / "profile" / "cv.pdf").write_bytes(b"%PDF-old")
+    with TestClient(main.app) as c:
+        assert c.post("/api/profile/cv", content=b"%PDF-garbage").status_code == 422
+    assert (tmp_path / "profile" / "cv.pdf").read_bytes() == b"%PDF-old"

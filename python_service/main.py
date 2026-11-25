@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 from typing import Literal
 
+from fastapi.concurrency import run_in_threadpool
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
@@ -339,11 +340,11 @@ def get_settings() -> dict:
 
 @app.put("/api/settings")
 def put_settings(patch: dict) -> dict:
-    try:
-        settings.save(DATA_DIR, patch)
-    except ValueError as e:
-        raise HTTPException(422, str(e))
-    with llm_lock:
+    with llm_lock:  # don't swap env/client under an in-flight analysis
+        try:
+            settings.save(DATA_DIR, patch)
+        except ValueError as e:
+            raise HTTPException(422, str(e))
         reload_settings()
     return settings.public()
 
@@ -366,9 +367,21 @@ async def upload_cv(request: Request) -> dict:
     data = await request.body()
     if not data.startswith(b"%PDF") or len(data) > MAX_CV_BYTES:
         raise HTTPException(422, "Upload a PDF under 10 MB")
+    return await run_in_threadpool(_save_cv, data)  # may wait on llm_lock / call the LLM: keep the event loop free
+
+
+def _save_cv(data: bytes) -> dict:
     os.makedirs(profile_dir(), exist_ok=True)
-    with open(os.path.join(profile_dir(), "cv.pdf"), "wb") as f:
+    final = os.path.join(profile_dir(), "cv.pdf")
+    tmp = final + ".tmp"
+    with open(tmp, "wb") as f:
         f.write(data)
+    try:
+        extract_cv_text(tmp)  # must parse before it replaces the working CV
+    except Exception:
+        os.remove(tmp)
+        raise HTTPException(422, "That file is not a readable PDF")
+    os.replace(tmp, final)
     with llm_lock:  # cleaning the CV calls the LLM
         load_profile()
     return profile_info()
@@ -379,13 +392,16 @@ class JobDescription(BaseModel):
 @app.put("/api/profile/job-description")
 def put_job_description(jd: JobDescription) -> dict:
     os.makedirs(profile_dir(), exist_ok=True)
-    for name in ("job_description.md", "job_description.txt"):
-        path = os.path.join(profile_dir(), name)
-        if os.path.exists(path):
-            os.remove(path)
+    md = os.path.join(profile_dir(), "job_description.md")
     if jd.text.strip():
-        with open(os.path.join(profile_dir(), "job_description.md"), "w", encoding="utf-8") as f:
+        with open(md + ".tmp", "w", encoding="utf-8") as f:
             f.write(jd.text.strip())
+        os.replace(md + ".tmp", md)
+    elif os.path.exists(md):
+        os.remove(md)
+    txt = os.path.join(profile_dir(), "job_description.txt")
+    if os.path.exists(txt):  # .md wins on load; a stale .txt would resurrect a cleared description
+        os.remove(txt)
     with llm_lock:
         load_profile()
     return profile_info()

@@ -120,7 +120,7 @@ async function profileCall(url, opts, btn) {
   btn.disabled = true;
   try {
     const r = await fetch(url, opts);
-    if (r.ok) showProfile(await r.json()); else alert((await r.json()).detail);
+    if (r.ok) showProfile(await r.json()); else alert((await r.json().catch(() => ({}))).detail || 'Upload failed');
   } finally { btn.disabled = false; }
 }
 document.getElementById('cv-save').onclick = (e) => {

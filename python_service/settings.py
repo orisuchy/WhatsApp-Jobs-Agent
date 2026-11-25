@@ -35,7 +35,11 @@ def load(data_dir: str) -> dict[str, str]:
     except FileNotFoundError:
         return {}
     except (OSError, ValueError, AttributeError):
-        logger.exception("Ignoring unreadable settings file")
+        logger.exception("Unreadable settings file moved aside to settings.json.corrupt")
+        try:
+            os.replace(_path(data_dir), _path(data_dir) + ".corrupt")  # keep it: a later save must not destroy it
+        except OSError:
+            pass
         return {}
 
 
@@ -87,7 +91,7 @@ def validate(patch: dict) -> dict[str, str]:
 
 
 def save(data_dir: str, patch: dict) -> None:
-    """Validate, merge into the settings file (empty secret = keep current), and apply."""
+    """Validate and merge into the settings file (empty secret = keep current). Callers then reload_settings()."""
     clean = validate(patch)
     current = load(data_dir)
     for k, v in clean.items():
@@ -100,7 +104,6 @@ def save(data_dir: str, patch: dict) -> None:
         json.dump(current, f, indent=2)
     os.chmod(tmp, 0o600)
     os.replace(tmp, _path(data_dir))
-    apply(data_dir)
 
 
 def public() -> dict:

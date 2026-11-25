@@ -1,0 +1,25 @@
+python_service/tests/test_url_fetcher.py
+  s_e1138c4128eed9::t_a105c8c954355d 63-102
+node_service/whatsapp-agent.js
+  s_e1138c4128eed9::t_a105c8c954355d 128-129,147-153
+python_service/main.py
+  s_e1138c4128eed9::t_a105c8c954355d 8,64-66,81-89
+node_service/whatsapp-agent.test.js
+  s_e1138c4128eed9::t_a105c8c954355d 217-235
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "30c7ae6b9b2208d8d3e89c731f1f14640fcc5766",
+  "prompts": {},
+  "sessions": {
+    "s_e1138c4128eed9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4b9f6eb5-46c2-46c7-bf14-8baffc9cb740",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "ori.suchy <ori.suchy@coro.net>"
+    }
+  }
+}

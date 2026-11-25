@@ -118,3 +118,25 @@ def test_openai_fallback_describes_schema_in_system_message():
     assert sent[0][0]["content"] == "S"  # enforced path: untouched
     assert sent[1][0]["content"].startswith("S") and '{"type":"object"}' in sent[1][0]["content"]
     assert [m["role"] for m in sent[1]] == ["system", "user"]
+
+
+@pytest.mark.parametrize("env,expected", [({}, False), ({"LLM_THINK": "true"}, True)])
+def test_ollama_think_flag(env, expected):
+    seen = {}
+
+    class Cl:
+        def chat(self, **kw):
+            seen.update(kw)
+            return {"message": {"content": "{}"}}
+
+    c = load_llm_client(env)
+    c._client = Cl()
+    c.complete([])
+    assert seen["think"] is expected
+
+
+def test_is_timeout():
+    from llm import is_timeout
+
+    assert is_timeout(httpx.ReadTimeout("x"))
+    assert not is_timeout(ValueError("x"))

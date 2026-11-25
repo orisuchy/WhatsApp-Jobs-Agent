@@ -156,7 +156,7 @@ Set in `.env`. `LLM_PROVIDER=ollama` (default) talks to Ollama natively;
 | Anthropic | `https://api.anthropic.com/v1/` | a Claude model id |
 
 Also: `LLM_API_KEY` (hosted providers), `LLM_NUM_CTX` (Ollama only, default 16384),
-`LLM_TIMEOUT_S` (default 170). `OLLAMA_URL` / `OLLAMA_MODEL` still work as fallbacks.
+`LLM_TIMEOUT_S` (default 170), `LLM_THINK` (Ollama only, default false: hidden "thinking" is disabled so thinking models answer fast; set `true` to re-enable). `OLLAMA_URL` / `OLLAMA_MODEL` still work as fallbacks.
 A malformed model reply is retried once, then treated as no-match. Note: with a hosted
 provider your CV and postings are sent to it (the raw CV text goes once for the cleaning/anonymising step).
 
@@ -221,6 +221,8 @@ Everything stays on your machine except what you send out:
   Inside Docker the URL is `http://host.docker.internal:11434`; on Linux Ollama must listen on
   an address the container can reach (`OLLAMA_HOST=0.0.0.0`).
 - **Nothing is analysed:** a keyword pre-filter in `node_service/whatsapp-agent.js` (`JOB_KEYWORDS`, Hebrew and English hiring phrases) drops messages that look unrelated to jobs.
+- **Slow local model / "LLM timed out" in the logs:** raise `LLM_TIMEOUT_S` *and* `ANALYZE_TIMEOUT_MS`
+  together (the Node value, in ms, must be the larger one), or use a smaller model.
 - **Every posting is a no-match:** check the python-backend logs for a missing profile or LLM errors.
 
 ## Contributing

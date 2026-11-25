@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field, field_validator
 from pypdf import PdfReader
 import requests
 
-from llm import complete_json, load_llm_client
+from llm import complete_json, is_timeout, load_llm_client
 from prompts import CV_ORGANIZER, evaluation_prompt
 import outputs
 import settings
@@ -173,7 +173,10 @@ def analyze_job_posting(posting_text: str, fetched_data: str, cv_text: str, clie
             override={"company": company_name} if company_name else None,
         )
         return result or {"odds": 0}
-    except Exception:
+    except Exception as e:
+        if is_timeout(e):
+            logger.error("LLM timed out after %s s — raise LLM_TIMEOUT_S or use a smaller model", os.environ.get("LLM_TIMEOUT_S", 170))
+            return {"odds": 0}
         logger.exception("analyze_job_posting failed")
         return {"odds": 0}
 

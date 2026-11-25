@@ -13,10 +13,10 @@ DEFAULT_OLLAMA_URL = "http://host.docker.internal:11434"
 
 
 class OllamaLLM:
-    def __init__(self, base_url: str, model: str, num_ctx: int, timeout: float):
+    def __init__(self, base_url: str, model: str, num_ctx: int, timeout: float, think: bool = False):
         from ollama import Client
 
-        self.model, self.num_ctx = model, num_ctx
+        self.model, self.num_ctx, self.think = model, num_ctx, think
         self._client = Client(host=base_url, timeout=timeout)
 
     def complete(self, messages, schema=None, keep_alive=None) -> str:
@@ -26,6 +26,7 @@ class OllamaLLM:
             format=schema,
             options={"temperature": 0.0, "num_ctx": self.num_ctx},
             keep_alive=keep_alive,
+            think=self.think,  # thinking models (gemma4) otherwise reason for minutes before the JSON
         )
         return response["message"]["content"]
 
@@ -80,12 +81,20 @@ def load_llm_client(env=os.environ):
             env.get("LLM_MODEL") or env.get("OLLAMA_MODEL") or DEFAULT_MODEL,
             int(env.get("LLM_NUM_CTX", 16384)),
             timeout,
+            env.get("LLM_THINK", "").strip().lower() in ("1", "true", "yes", "on"),
         )
     if provider == "openai":
         if not env.get("LLM_MODEL"):
             raise ValueError("LLM_MODEL is required when LLM_PROVIDER=openai")
         return OpenAILLM(env.get("LLM_BASE_URL"), env.get("LLM_API_KEY", ""), env["LLM_MODEL"], timeout)
     raise ValueError(f"Unknown LLM_PROVIDER {provider!r} (use 'ollama' or 'openai')")
+
+
+def is_timeout(e: BaseException) -> bool:
+    import httpx
+    from openai import APITimeoutError
+
+    return isinstance(e, (httpx.TimeoutException, APITimeoutError))
 
 
 def parse_json_object(text: str) -> dict:

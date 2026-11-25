@@ -243,3 +243,8 @@ def test_dispatcher_isolates_failing_destination(monkeypatch):
     monkeypatch.setenv("OUTPUTS", "boom,ok,bogus")
     outputs.dispatch({"x": 1})
     assert calls == [{"x": 1}]
+
+
+def test_dedup_ignores_trailing_punctuation_on_url():
+    import outputs
+    assert outputs.job_key("apply: https://x.io/j/1.") == outputs.job_key("(https://x.io/j/1) hi")

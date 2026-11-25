@@ -19,6 +19,11 @@ LABELS = {
 }
 
 
+def first_url(text: str):
+    m = URL_RE.search(text)
+    return m.group(0).rstrip(".,;:!?)]}>\"'") if m else None
+
+
 def match_threshold() -> int:
     try:
         return int(os.environ.get("MATCH_THRESHOLD", "70"))
@@ -37,8 +42,7 @@ def enabled_outputs() -> list[str]:
 
 def job_key(text: str) -> str:
     """Hash of the first URL, else of the whitespace/case-normalised text."""
-    m = URL_RE.search(text)
-    basis = m.group(0) if m else " ".join(text.lower().split())
+    basis = first_url(text) or " ".join(text.lower().split())
     return hashlib.sha256(basis.encode("utf-8")).hexdigest()
 
 
@@ -111,7 +115,6 @@ def process_match(result: dict, text: str, group: str, data_dir: str, language: 
     odds = result.get("odds", 0)
     if odds < match_threshold():
         return {**result, "forward": False}
-    m = URL_RE.search(text)
     job = {
         "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "group": group,
@@ -120,7 +123,7 @@ def process_match(result: dict, text: str, group: str, data_dir: str, language: 
         "summary": result.get("summary", ""),
         "reason": result.get("reason", ""),
         "text": text,
-        "url": m.group(0) if m else None,
+        "url": first_url(text),
     }
     if not record_if_new(data_dir, job):
         logger.info("Duplicate job dropped (%s)", job["url"] or job["text"][:60])

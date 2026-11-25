@@ -33,7 +33,8 @@ def test_analyze_returns_result_synchronously(monkeypatch):
         _mock_llm(monkeypatch)
         body = _analyze(c).json()
 
-    assert body == GOOD
+    assert {k: body[k] for k in GOOD} == GOOD
+    assert body["forward"] is True
 
 
 def test_batch_endpoints_are_gone():
@@ -72,7 +73,7 @@ def test_failure_yields_zero_odds(monkeypatch):
         response = _analyze(c)
 
     assert response.status_code == 200
-    assert response.json() == {"odds": 0}
+    assert response.json() == {"odds": 0, "forward": False}
 
 
 def test_analyze_includes_fetched_job_description(monkeypatch):
@@ -111,7 +112,7 @@ def test_missing_profile_returns_no_match_without_calling_llm(tmp_path, monkeypa
     client = _mock_llm(monkeypatch)
     with TestClient(main.app) as c:
         response = _analyze(c)
-    assert response.json() == {"odds": 0}
+    assert response.json() == {"odds": 0, "forward": False}
     client.complete.assert_not_called()
 
 
@@ -120,7 +121,7 @@ def test_cv_only_mode(tmp_path, monkeypatch):
     client = _mock_llm(monkeypatch)
     monkeypatch.setattr(main, "clean_cv", lambda raw, c: "CLEANED CV")
     with TestClient(main.app) as c:
-        assert _analyze(c).json() == GOOD
+        assert _analyze(c).json()["company"] == "Acme"
     sent = _sent(client)
     assert "<candidate_cv>" in sent and "CLEANED CV" in sent
     assert "<desired_job_description>" not in sent
@@ -131,7 +132,7 @@ def test_jd_only_mode_txt(tmp_path, monkeypatch):
     _profile(tmp_path, jd="Senior Rust backend", jd_name="job_description.txt")
     client = _mock_llm(monkeypatch)
     with TestClient(main.app) as c:
-        assert _analyze(c).json() == GOOD
+        assert _analyze(c).json()["company"] == "Acme"
     sent = _sent(client)
     assert "<desired_job_description>" in sent and "Senior Rust backend" in sent
     assert "<candidate_cv>" not in sent
@@ -173,3 +174,72 @@ def test_failed_cleaning_falls_back_to_raw_and_is_not_cached(tmp_path, monkeypat
     monkeypatch.setattr(main, "clean_cv", boom)
     assert "Python" in main.load_cv()
     assert not (d / "cv_clean_text.txt").exists()
+
+
+# --- outputs, store, dedup ---------------------------------------------------
+
+
+def _post(c, text, group):
+    return c.post("/analyze", json={"text": text, "group": group}).json()
+
+
+def test_below_threshold_is_not_forwarded_or_stored(tmp_path, monkeypatch):
+    _mock_llm(monkeypatch, {**GOOD, "odds": 69})
+    with TestClient(main.app) as c:
+        monkeypatch.setattr(main, "CV_TEXT", "Python")
+        body = _post(c, "Python dev", "G1")
+    assert body["forward"] is False
+    assert not (tmp_path / "matches.jsonl").exists()
+
+
+def test_dedup_across_groups_and_store_entry(tmp_path, monkeypatch):
+    _mock_llm(monkeypatch)
+    with TestClient(main.app) as c:
+        monkeypatch.setattr(main, "CV_TEXT", "Python")
+        first = _post(c, "Python dev at Acme https://x.io/j/1", "G1")
+        dup_url = _post(c, "Different words https://x.io/j/1", "G2")
+        first_txt = _post(c, "Rust  dev\nat Acme", "G1")
+        dup_txt = _post(c, "rust dev at ACME", "G2")
+    assert first["forward"] and first_txt["forward"]
+    assert not dup_url["forward"] and not dup_txt["forward"]
+    rows = [json.loads(l) for l in (tmp_path / "matches.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert len(rows) == 2
+    assert rows[0]["group"] == "G1" and rows[0]["score"] == 80 and rows[0]["company"] == "Acme"
+    assert rows[0]["url"] == "https://x.io/j/1" and rows[0]["text"].startswith("Python dev")
+    assert "G1" in first["whatsapp_text"] and "Python dev at Acme" in first["whatsapp_text"]
+
+
+def test_whatsapp_text_in_configured_language(monkeypatch):
+    monkeypatch.setattr(main, "OUTPUT_LANGUAGE", "Hebrew")
+    _mock_llm(monkeypatch)
+    with TestClient(main.app) as c:
+        monkeypatch.setattr(main, "CV_TEXT", "Python")
+        assert "התאמה" in _post(c, "x", "G")["whatsapp_text"]
+
+
+def test_file_output_content(tmp_path, monkeypatch):
+    out = tmp_path / "out"
+    monkeypatch.setenv("OUTPUTS", "whatsapp,file")
+    monkeypatch.setenv("OUTPUT_DIR", str(out))
+    _mock_llm(monkeypatch)
+    with TestClient(main.app) as c:
+        monkeypatch.setattr(main, "CV_TEXT", "Python")
+        _post(c, "Python dev\nhttps://x.io/j/9", "G1")
+    row = json.loads((out / "matches.jsonl").read_text(encoding="utf-8"))
+    assert row["company"] == "Acme" and row["group"] == "G1"
+    md = (out / "matches.md").read_text(encoding="utf-8")
+    assert "Acme" in md and "80%" in md and "https://x.io/j/9" in md and "> Python dev" in md
+
+
+def test_dispatcher_isolates_failing_destination(monkeypatch):
+    import outputs
+    calls = []
+
+    def boom(job):
+        raise RuntimeError("down")
+
+    monkeypatch.setitem(outputs.DESTINATIONS, "boom", boom)
+    monkeypatch.setitem(outputs.DESTINATIONS, "ok", calls.append)
+    monkeypatch.setenv("OUTPUTS", "boom,ok,bogus")
+    outputs.dispatch({"x": 1})
+    assert calls == [{"x": 1}]

@@ -53,55 +53,28 @@ function containsJobKeywords(text, keywords = JOB_KEYWORDS) {
   });
 }
 
-function formatForwardMessage({ odds, reason, company, summary, originalText, groupName }) {
-  const groupLine = groupName ? `*קבוצה:* ${groupName}` : '';
-  const lines = [
-    `משרה חדשה! ${odds}% התאמה:`,
-    '',
-  ];
-  if (groupLine) lines.push(groupLine);
-  lines.push(
-    `*סיכום:* ${summary}`,
-    `*חברה:* ${company}`,
-    `*סיבת התאמה:* ${reason}`,
-    '',
-    '--- המודעה המקורית ---',
-    originalText
-  );
-  return lines.join('\n');
-}
-
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const axios = require('axios');
 
 // Single access point for configuration (read on every call so it can be swapped later).
 function getConfig() {
-  const threshold = parseInt(process.env.MATCH_THRESHOLD, 10);
   return {
     sourceGroupIds: (process.env.SOURCE_GROUP_IDS || '')
       .split(',')
       .map((id) => id.trim())
       .filter(Boolean),
     targetGroupId: process.env.TARGET_GROUP_ID || '',
-    matchThreshold: isNaN(threshold) ? 70 : threshold,
+    outputs: (process.env.OUTPUTS || 'whatsapp')
+      .split(',')
+      .map((o) => o.trim().toLowerCase())
+      .filter(Boolean),
   };
 }
 
 const ANALYZE_URL = process.env.ANALYZE_URL || 'http://python-backend:8000/analyze';
 const parsedTimeout = parseInt(process.env.ANALYZE_TIMEOUT_MS, 10);
 const ANALYZE_TIMEOUT_MS = parsedTimeout > 0 ? parsedTimeout : 180000;
-
-function parseOdds(oddsValue) {
-  if (typeof oddsValue === 'number') {
-    return oddsValue;
-  }
-  if (typeof oddsValue === 'string') {
-    const parsed = parseInt(oddsValue, 10);
-    return isNaN(parsed) ? 0 : parsed;
-  }
-  return 0;
-}
 
 async function handleIncomingMessage(client, message) {
   if (!isFromSourceGroup(message.from, getConfig().sourceGroupIds)) {
@@ -114,12 +87,13 @@ async function handleIncomingMessage(client, message) {
   }
 
   try {
-    const { data } = await axios.post(ANALYZE_URL, { text: message.body }, { timeout: ANALYZE_TIMEOUT_MS });
-    if (!data) {
-      log_info(`Message not sent - Job doesn't match`);
-      return;
+    let group = '';
+    try {
+      group = (await message.getChat?.())?.name || '';
+    } catch (err) {
+      log_error('Could not read group name: ' + err.message);
     }
-
+    const { data } = await axios.post(ANALYZE_URL, { text: message.body, group }, { timeout: ANALYZE_TIMEOUT_MS });
     await processSingleResult(client, data, message);
 
   } catch (err) {
@@ -131,28 +105,15 @@ async function handleIncomingMessage(client, message) {
   }
 }
 
+// Python decides match/dedup and formats the text; Node only delivers to WhatsApp.
 async function processSingleResult(client, result, message) {
-  const odds = parseOdds(result.odds);
-  const oddsThreshold = getConfig().matchThreshold;
-  if (odds < oddsThreshold) {
-    log_info(`Message not sent - odds below ${oddsThreshold}% threshold. Odds: ${odds}%, Reason: ${result.reason || 'N/A'}, Text: ${message.body.substring(0, 100)}`);
+  if (!result || !result.forward) {
+    log_info(`Message not sent - no match or duplicate. Text: ${message.body.substring(0, 100)}`);
     return;
   }
-  let groupName;
-  try {
-    groupName = (await message.getChat?.())?.name;
-  } catch (err) {
-    log_error('Could not read group name: ' + err.message);
-  }
-  const forwardText = formatForwardMessage({
-    odds: result.odds,
-    reason: result.reason,
-    company: result.company,
-    summary: result.summary,
-    originalText: message.body,
-    groupName,
-  });
-  await client.sendMessage(getConfig().targetGroupId, forwardText);
+  const { outputs, targetGroupId } = getConfig();
+  if (!outputs.includes('whatsapp')) return;
+  await client.sendMessage(targetGroupId, result.whatsapp_text);
 }
 
 function createClient() {
@@ -215,10 +176,8 @@ function start() {
 module.exports = {
   isFromSourceGroup,
   containsJobKeywords,
-  formatForwardMessage,
   handleIncomingMessage,
   processSingleResult,
-  parseOdds,
   getConfig,
 };
 

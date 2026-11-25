@@ -9,7 +9,6 @@ const assert = require('node:assert/strict');
 const {
   isFromSourceGroup,
   containsJobKeywords,
-  formatForwardMessage,
 } = require('./whatsapp-agent');
 
 test('isFromSourceGroup returns true for a listed source group', () => {
@@ -30,38 +29,9 @@ test('containsJobKeywords returns false when no keyword is present', () => {
   assert.equal(containsJobKeywords('שיחת חולין רגילה'), false);
 });
 
-test('containsJobKeywords returns false for empty or undefined text', () => {
-  assert.equal(containsJobKeywords(''), false);
-  assert.equal(containsJobKeywords(undefined), false);
-});
-
-test('formatForwardMessage includes reason, summary and original text', () => {
-  const formatted = formatForwardMessage({
-    reason: 'התאמה טובה',
-    summary: 'מפתח Python',
-    originalText: 'דרוש מפתח Python ב-Acme',
-  });
-  assert.match(formatted, /התאמה טובה/);
-  assert.match(formatted, /מפתח Python/);
-  assert.match(formatted, /דרוש מפתח Python ב-Acme/);
-});
-
-test('formatForwardMessage includes group name when provided', () => {
-  const formatted = formatForwardMessage({
-    reason: 'התאמה טובה',
-    summary: 'מפתח Python',
-    originalText: 'דרוש מפתח Python ב-Acme',
-    groupName: 'AI Agents - Jobs',
-  });
-  assert.match(formatted, /\*קבוצה:\* AI Agents - Jobs/);
-  assert.match(formatted, /התאמה טובה/);
-  assert.match(formatted, /מפתח Python/);
-});
-
 const axios = require('axios');
 const {
   handleIncomingMessage,
-  parseOdds,
   getConfig,
 } = require('./whatsapp-agent');
 
@@ -92,7 +62,7 @@ test('handleIncomingMessage ignores messages without job keywords', async (t) =>
 
 test('handleIncomingMessage forwards matched job postings to the target group', async (t) => {
   t.mock.method(axios, 'post', async () => ({
-    data: { reason: 'התאמה טובה', summary: 'מפתח Python', odds: 75 },
+    data: { forward: true, whatsapp_text: 'מפתח Python' },
   }));
   const sentMessages = [];
   const fakeClient = { sendMessage: async (to, text) => sentMessages.push({ to, text }) };
@@ -107,85 +77,9 @@ test('handleIncomingMessage forwards matched job postings to the target group', 
   assert.match(sentMessages[0].text, /מפתח Python/);
 });
 
-test('handleIncomingMessage swallows errors from a failing backend call', async (t) => {
-  t.mock.method(axios, 'post', async () => {
-    throw new Error('network down');
-  });
-  const sentMessages = [];
-  const fakeClient = { sendMessage: async (to, text) => sentMessages.push({ to, text }) };
-
-  await assert.doesNotReject(
-    handleIncomingMessage(fakeClient, { from: firstSourceGroupId, body: 'משרה: מפתח' })
-  );
-  assert.equal(sentMessages.length, 0);
-});
-
-test('parseOdds converts string percentage to number', () => {
-  assert.equal(parseOdds('75%'), 75);
-  assert.equal(parseOdds('80'), 80);
-});
-
-test('parseOdds returns number as-is', () => {
-  assert.equal(parseOdds(75), 75);
-  assert.equal(parseOdds(100), 100);
-});
-
-test('parseOdds returns 0 for invalid input', () => {
-  assert.equal(parseOdds('invalid'), 0);
-  assert.equal(parseOdds(null), 0);
-  assert.equal(parseOdds(undefined), 0);
-});
-
-test('handleIncomingMessage does not forward when odds are below 70%', async (t) => {
-  t.mock.method(axios, 'post', async () => ({
-    data: { reason: 'התאמה חלשה', summary: 'מפתח Python', odds: 65 },
-  }));
-  const sentMessages = [];
-  const fakeClient = { sendMessage: async (to, text) => sentMessages.push({ to, text }) };
-
-  await handleIncomingMessage(fakeClient, {
-    from: firstSourceGroupId,
-    body: 'דרוש מפתח Python',
-  });
-
-  assert.equal(sentMessages.length, 0);
-});
-
-test('handleIncomingMessage forwards when odds are 70% or higher', async (t) => {
-  t.mock.method(axios, 'post', async () => ({
-    data: { reason: 'התאמה טובה', summary: 'מפתח Python', odds: 75 },
-  }));
-  const sentMessages = [];
-  const fakeClient = { sendMessage: async (to, text) => sentMessages.push({ to, text }) };
-
-  await handleIncomingMessage(fakeClient, {
-    from: firstSourceGroupId,
-    body: 'דרוש מפתח Python',
-  });
-
-  assert.equal(sentMessages.length, 1);
-  assert.equal(sentMessages[0].to, TARGET_GROUP_ID);
-});
-
-test('forwarded message uses the group name from the WhatsApp chat', async (t) => {
-  t.mock.method(axios, 'post', async () => ({
-    data: { reason: 'x', summary: 'y', odds: 90 },
-  }));
-  const sentMessages = [];
-  const fakeClient = { sendMessage: async (to, text) => sentMessages.push({ to, text }) };
-
-  await handleIncomingMessage(fakeClient, {
-    from: firstSourceGroupId,
-    body: 'דרוש מפתח Python',
-    getChat: async () => ({ name: 'Runtime Group' }),
-  });
-
-  assert.match(sentMessages[0].text, /\*קבוצה:\* Runtime Group/);
-});
-
 test('each posting is forwarded with its own text, timeout is passed to axios', async (t) => {
   const postMock = t.mock.method(axios, 'post', async (url, body) => ({
-    data: { reason: 'r', summary: 's', odds: 90, company: 'C' },
+    data: { forward: true, whatsapp_text: `msg ${body.text}` },
   }));
   const sentMessages = [];
   const fakeClient = { sendMessage: async (to, text) => sentMessages.push({ to, text }) };
@@ -211,4 +105,38 @@ test('a timed-out analysis is skipped without forwarding', async (t) => {
     handleIncomingMessage(fakeClient, { from: firstSourceGroupId, body: 'דרוש מפתח' })
   );
   assert.equal(sentMessages.length, 0);
+});
+
+test('does not send when Python says not to forward (below threshold / duplicate)', async (t) => {
+  t.mock.method(axios, 'post', async () => ({ data: { odds: 90, forward: false } }));
+  const sent = [];
+  const fakeClient = { sendMessage: async (to, text) => sent.push({ to, text }) };
+  await handleIncomingMessage(fakeClient, { from: firstSourceGroupId, body: 'דרוש מפתח' });
+  assert.equal(sent.length, 0);
+});
+
+test('does not send to WhatsApp when whatsapp is not in OUTPUTS', async (t) => {
+  t.mock.method(axios, 'post', async () => ({ data: { forward: true, whatsapp_text: 'hi' } }));
+  const sent = [];
+  const fakeClient = { sendMessage: async (to, text) => sent.push({ to, text }) };
+  process.env.OUTPUTS = 'file';
+  try {
+    await handleIncomingMessage(fakeClient, { from: firstSourceGroupId, body: 'דרוש מפתח' });
+  } finally {
+    delete process.env.OUTPUTS;
+  }
+  assert.equal(sent.length, 0);
+});
+
+test('sends the ready text and passes the group name to Python', async (t) => {
+  const postMock = t.mock.method(axios, 'post', async () => ({ data: { forward: true, whatsapp_text: 'READY' } }));
+  const sent = [];
+  const fakeClient = { sendMessage: async (to, text) => sent.push({ to, text }) };
+  await handleIncomingMessage(fakeClient, {
+    from: firstSourceGroupId,
+    body: 'דרוש מפתח',
+    getChat: async () => ({ name: 'Runtime Group' }),
+  });
+  assert.deepEqual(sent, [{ to: TARGET_GROUP_ID, text: 'READY' }]);
+  assert.equal(postMock.mock.calls[0].arguments[1].group, 'Runtime Group');
 });

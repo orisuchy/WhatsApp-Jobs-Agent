@@ -15,6 +15,7 @@ import requests
 
 from llm import complete_json, load_llm_client
 from prompts import CV_ORGANIZER, evaluation_prompt
+import outputs
 from logger import setup_logger
 
 logger = setup_logger("job-agent")
@@ -179,6 +180,7 @@ llm_lock = Lock()  # one LLM call at a time
 
 class JobPosting(BaseModel):
     text: str
+    group: str = ""
 
 
 def profile_mode(cv_text: str, jd_text: str) -> str:
@@ -277,7 +279,8 @@ app = FastAPI(lifespan=lifespan)
 @app.post("/analyze")
 def analyze(posting: JobPosting) -> dict:
     if profile_mode(CV_TEXT, JD_TEXT) == "none":
-        return {"odds": 0}
+        return {"odds": 0, "forward": False}
     fetched_data, company_name = extract_fetched_data(posting.text)
     with llm_lock:
-        return analyze_job_posting(posting.text, fetched_data, CV_TEXT, llm_client, company_name, JD_TEXT)
+        result = analyze_job_posting(posting.text, fetched_data, CV_TEXT, llm_client, company_name, JD_TEXT)
+    return outputs.process_match(result, posting.text, posting.group, DATA_DIR, OUTPUT_LANGUAGE)

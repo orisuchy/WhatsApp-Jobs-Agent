@@ -36,7 +36,35 @@ Change the folder with `DATA_DIR`.
    ```
    Or locally: `cd node_service && LIST_GROUPS=1 npm start`. Scan the QR code on first run.
 3. Paste the JIDs into `.env`: `SOURCE_GROUP_IDS` (comma-separated), `TARGET_GROUP_ID`,
-   and optionally `MATCH_THRESHOLD` (default 70).
+   and optionally `MATCH_THRESHOLD` (default 70) and `OUTPUTS`.
+
+## Where matches go
+
+Every match at or above `MATCH_THRESHOLD` is recorded once in `data/matches.jsonl`;
+repeats of the same job (same first URL, or same text ignoring case/whitespace) across
+groups are dropped. Pick destinations with `OUTPUTS` (comma-separated, default `whatsapp`;
+unknown names are logged and ignored). One destination failing doesn't affect the others.
+
+- `whatsapp` — forwards to `TARGET_GROUP_ID`, in `OUTPUT_LANGUAGE` (Hebrew or English labels).
+- `file` — appends `matches.jsonl` and a readable `matches.md` to `OUTPUT_DIR`
+  (default `data/outputs`).
+
+### Sync the file output to Google Drive
+
+Install [Drive for Desktop](https://www.google.com/drive/download/), pick a folder inside
+the synced Drive, and bind-mount it as `OUTPUT_DIR` in `docker-compose.yml`:
+
+```yaml
+  python-backend:
+    environment:
+      DATA_DIR: /data
+      OUTPUT_DIR: /outputs
+    volumes:
+      - ./data:/data
+      - "/Users/you/Google Drive/My Drive/job-matches:/outputs"
+```
+
+And set `OUTPUTS=whatsapp,file` in `.env`.
 
 ## Choosing an LLM provider
 

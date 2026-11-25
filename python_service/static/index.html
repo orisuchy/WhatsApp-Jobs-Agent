@@ -131,7 +131,7 @@ document.getElementById('jd-save').onclick = (e) => profileCall('/api/profile/jo
   { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: document.getElementById('jd').value }) }, e.target);
 fetch('/api/profile').then((r) => r.json()).then(showProfile);
 // groups arrive after WhatsApp connects: reload the form once, unless the user is editing
-let groupsSeen = 0;
+let groupsSeen = -1; // -1 so the form renders even before any groups arrive
 async function syncGroups() {
   const n = (await (await fetch('/api/status')).json()).groups.length;
   if (n !== groupsSeen && !form.contains(document.activeElement)) { groupsSeen = n; loadSettings(); }

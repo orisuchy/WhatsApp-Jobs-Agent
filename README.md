@@ -218,7 +218,8 @@ Everything stays on your machine except what you send out:
 - **Chromium "profile in use" / SingletonLock error:** the container deletes stale locks on start, so
   `docker compose restart node-whatsapp` is usually enough; if it persists, remove the `whatsapp_session` volume.
 - **"Failed to initialize client: Cannot read properties of null (reading 'Socket')" (or similar):** a
-  WhatsApp Web update broke whatsapp-web.js. Rebuild to pick up a newer library (`docker compose up --build`);
+  WhatsApp Web update broke whatsapp-web.js. (whatsapp-web.js is installed from upstream commit `38eb45b2`, which fixes the
+  November 2026 break; switch back to the npm release once one includes it.) Rebuild to pick up a newer library (`docker compose up --build`);
   if that doesn't help, pin a known-good build with `WWEBJS_WEB_VERSION=<version>` in `.env` (pick one from
   [wa-version](https://github.com/wppconnect-team/wa-version/tree/main/html), file name without `.html`) and
   `docker compose up -d node-whatsapp`.

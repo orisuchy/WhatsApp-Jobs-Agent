@@ -11,7 +11,7 @@ logger = setup_logger("job-agent.settings")
 
 KEYS = (
     "SOURCE_GROUP_IDS", "TARGET_GROUP_ID", "MATCH_THRESHOLD", "OUTPUT_LANGUAGE", "OUTPUTS",
-    "LLM_PROVIDER", "LLM_MODEL", "LLM_BASE_URL", "LLM_API_KEY",
+    "LLM_PROVIDER", "LLM_MODEL", "LLM_BASE_URL", "LLM_API_KEY", "LLM_NUM_CTX",
     "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
     "SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "EMAIL_FROM", "EMAIL_TO",
     "GOOGLE_SERVICE_ACCOUNT_FILE", "GOOGLE_SHEET_ID", "GOOGLE_SHEET_TAB",
@@ -85,6 +85,8 @@ def validate(patch: dict) -> dict[str, str]:
         if bad:
             raise ValueError(f"Unknown output(s): {', '.join(bad)}")
         out["OUTPUTS"] = ",".join(names)
+    if out.get("LLM_NUM_CTX") and not (out["LLM_NUM_CTX"].isdigit() and int(out["LLM_NUM_CTX"]) >= 512):
+        raise ValueError("LLM_NUM_CTX must be a number of tokens (512 or more)")
     if "SMTP_PORT" in out and out["SMTP_PORT"] and not out["SMTP_PORT"].isdigit():
         raise ValueError("SMTP_PORT must be a number")
     return out

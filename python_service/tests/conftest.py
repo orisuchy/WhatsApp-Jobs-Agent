@@ -24,3 +24,10 @@ def isolated_env(monkeypatch):
 def reset_ui_state(monkeypatch):
     """/state pushes mutate a module global; restore it after every test."""
     monkeypatch.setattr(main, "ui_state", dict(main.ui_state))
+
+
+@pytest.fixture(autouse=True)
+def no_provider_calls(monkeypatch):
+    """Model metadata lookups hit the network; tests opt in by patching these again."""
+    monkeypatch.setattr(main, "model_context", lambda env=None: (None, None))
+    monkeypatch.setattr(main, "list_models", lambda env=None: ([], None))

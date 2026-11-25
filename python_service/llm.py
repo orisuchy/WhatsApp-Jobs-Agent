@@ -127,3 +127,60 @@ def complete_json(client, messages, model_cls, keep_alive=None, override=None):
         except (ValueError, ValidationError):
             logger.warning("Malformed LLM reply (attempt %d): %.200s", attempt, text)
     return None
+
+
+# --- Model metadata (for the UI's model list and context-window check) ------
+CONTEXT_KEYS = ("context_length", "context_window", "max_context_length", "max_model_len", "max_input_tokens")
+
+
+def _provider_base(env):
+    provider = env.get("LLM_PROVIDER", "ollama").strip().lower()
+    if provider == "ollama":
+        return provider, (env.get("LLM_BASE_URL") or env.get("OLLAMA_URL") or DEFAULT_OLLAMA_URL).rstrip("/")
+    return provider, (env.get("LLM_BASE_URL") or "https://api.openai.com/v1").rstrip("/")
+
+
+def _openai_models(base, env) -> list[dict]:
+    import requests
+
+    r = requests.get(f"{base}/models", headers={"Authorization": f"Bearer {env.get('LLM_API_KEY') or 'none'}"}, timeout=5)
+    r.raise_for_status()
+    return r.json().get("data", [])
+
+
+def list_models(env=os.environ) -> tuple[list[str], str | None]:
+    """Model names the provider offers, or ([], error message)."""
+    import requests
+
+    provider, base = _provider_base(env)
+    try:
+        if provider == "ollama":
+            r = requests.get(f"{base}/api/tags", timeout=5)
+            r.raise_for_status()
+            return sorted(m["name"] for m in r.json().get("models", [])), None
+        return sorted(m.get("id", "") for m in _openai_models(base, env) if m.get("id")), None
+    except Exception as e:
+        return [], f"Couldn't list models from {base}: {e}"
+
+
+def model_context(env=os.environ) -> tuple[int | None, str | None]:
+    """The model's maximum context window in tokens, or (None, error message / None if the provider doesn't say)."""
+    import requests
+
+    provider, base = _provider_base(env)
+    model = env.get("LLM_MODEL") or (env.get("OLLAMA_MODEL") if provider == "ollama" else "") or (DEFAULT_MODEL if provider == "ollama" else "")
+    try:
+        if provider == "ollama":
+            r = requests.post(f"{base}/api/show", json={"model": model}, timeout=5)
+            if r.status_code == 404:
+                return None, f"Model {model!r} isn't installed in Ollama. Run: ollama pull {model}"
+            r.raise_for_status()
+            info = r.json().get("model_info", {})
+            return next((int(v) for k, v in info.items() if k.endswith(".context_length")), None), None
+        for m in _openai_models(base, env):
+            if m.get("id") == model:
+                found = [m.get(k) for k in CONTEXT_KEYS] + [(m.get("top_provider") or {}).get("context_length")]
+                return next((int(v) for v in found if v), None), None
+        return None, None  # provider doesn't list it (aliases are common): can't tell
+    except Exception as e:
+        return None, f"Couldn't reach {base}: {e}"

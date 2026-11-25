@@ -356,3 +356,38 @@ def test_access_log_hides_ui_polling():
     assert not log.filter(rec("/api/status"))
     assert not log.filter(rec("/api/jobs"))
     assert log.filter(rec("/api/settings"))
+
+
+def _context(monkeypatch, model_max, num_ctx="16384", provider="ollama", cv="x" * 3000):
+    monkeypatch.setitem(os.environ, "LLM_PROVIDER", provider)
+    monkeypatch.setitem(os.environ, "LLM_NUM_CTX", num_ctx)
+    monkeypatch.setattr(main, "model_context", lambda env=None: (model_max, None))
+    with TestClient(main.app) as c:
+        monkeypatch.setattr(main, "CV_TEXT", cv)  # after startup, which loads the (empty) profile
+        return c.get("/api/context").json()
+
+
+def test_context_fits(monkeypatch):
+    r = _context(monkeypatch, 262144)
+    assert r["status"] == "ok" and r["window"] == 16384  # num_ctx caps the model's window
+    assert r["breakdown"]["profile"] == 1000 and r["needed"] == sum(r["breakdown"].values())
+
+
+def test_context_too_big_suggests_raising_num_ctx(monkeypatch):
+    r = _context(monkeypatch, 262144, num_ctx="4096")
+    assert r["status"] == "too_big" and "Raise LLM_NUM_CTX to 8,192" in r["message"]
+
+
+def test_context_too_big_for_model_suggests_shrinking(monkeypatch):
+    r = _context(monkeypatch, 4096, provider="openai", cv="x" * 30000)
+    assert r["status"] == "too_big" and r["window"] == 4096 and "Shorten" in r["message"]
+
+
+def test_context_unknown_when_model_unreadable(monkeypatch):
+    assert _context(monkeypatch, None)["status"] == "unknown"
+
+
+def test_num_ctx_setting_validated(monkeypatch):
+    with TestClient(main.app) as c:
+        assert c.put("/api/settings", json={"LLM_NUM_CTX": "abc"}).status_code == 422
+        assert c.put("/api/settings", json={"LLM_NUM_CTX": "32768"}).json()["values"]["LLM_NUM_CTX"] == "32768"

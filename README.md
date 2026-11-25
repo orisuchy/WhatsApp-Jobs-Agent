@@ -155,6 +155,8 @@ Set in `.env`. `LLM_PROVIDER=ollama` (default) talks to Ollama natively;
 | LM Studio | `http://host.docker.internal:1234/v1` | the loaded model |
 | Anthropic | `https://api.anthropic.com/v1/` | a Claude model id |
 
+**Context-window check:** the web UI (and a startup log line) estimates how many tokens one analysis needs (prompts + your CV/job description + room for the posting and reply) and warns when that doesn't fit the model's context window, with the fix (for Ollama usually: raise `LLM_NUM_CTX`). The window is read from Ollama, or from the provider's `/models` list when it reports one; otherwise the check is skipped.
+
 Also: `LLM_API_KEY` (hosted providers), `LLM_NUM_CTX` (Ollama only, default 16384),
 `LLM_TIMEOUT_S` (default 170), `LLM_THINK` (Ollama only, default false: hidden "thinking" is disabled so thinking models answer fast; set `true` to re-enable). `OLLAMA_URL` / `OLLAMA_MODEL` still work as fallbacks.
 A malformed model reply is retried once, then treated as no-match. Note: with a hosted

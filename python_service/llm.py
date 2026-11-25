@@ -50,9 +50,13 @@ class OpenAILLM:
             ]
         for i, fmt in enumerate(formats):
             kwargs = {"response_format": fmt} if fmt else {}
+            msgs = messages
+            if schema and (fmt is None or fmt["type"] != "json_schema"):
+                # schema not enforced by the provider: describe it compactly
+                msgs = messages + [{"role": "system", "content": "Reply with only a JSON object matching this JSON schema: " + json.dumps(schema, separators=(",", ":"))}]
             try:
                 r = self._client.chat.completions.create(
-                    model=self.model, messages=messages, temperature=0.0, **kwargs
+                    model=self.model, messages=msgs, temperature=0.0, **kwargs
                 )
                 return r.choices[0].message.content or ""
             except APIStatusError as e:

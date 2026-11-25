@@ -92,7 +92,7 @@ test('handleIncomingMessage ignores messages without job keywords', async (t) =>
 
 test('handleIncomingMessage forwards matched job postings to the target group', async (t) => {
   t.mock.method(axios, 'post', async () => ({
-    data: { reason: 'התאמה טובה', summary: 'מפתח Python', odds: '75%' },
+    data: { reason: 'התאמה טובה', summary: 'מפתח Python', odds: 75 },
   }));
   const sentMessages = [];
   const fakeClient = { sendMessage: async (to, text) => sentMessages.push({ to, text }) };
@@ -138,7 +138,7 @@ test('parseOdds returns 0 for invalid input', () => {
 
 test('handleIncomingMessage does not forward when odds are below 70%', async (t) => {
   t.mock.method(axios, 'post', async () => ({
-    data: { reason: 'התאמה חלשה', summary: 'מפתח Python', odds: '65%' },
+    data: { reason: 'התאמה חלשה', summary: 'מפתח Python', odds: 65 },
   }));
   const sentMessages = [];
   const fakeClient = { sendMessage: async (to, text) => sentMessages.push({ to, text }) };
@@ -153,7 +153,7 @@ test('handleIncomingMessage does not forward when odds are below 70%', async (t)
 
 test('handleIncomingMessage forwards when odds are 70% or higher', async (t) => {
   t.mock.method(axios, 'post', async () => ({
-    data: { reason: 'התאמה טובה', summary: 'מפתח Python', odds: '75%' },
+    data: { reason: 'התאמה טובה', summary: 'מפתח Python', odds: 75 },
   }));
   const sentMessages = [];
   const fakeClient = { sendMessage: async (to, text) => sentMessages.push({ to, text }) };
@@ -169,7 +169,7 @@ test('handleIncomingMessage forwards when odds are 70% or higher', async (t) => 
 
 test('forwarded message uses the group name from the WhatsApp chat', async (t) => {
   t.mock.method(axios, 'post', async () => ({
-    data: { reason: 'x', summary: 'y', odds: '90%' },
+    data: { reason: 'x', summary: 'y', odds: 90 },
   }));
   const sentMessages = [];
   const fakeClient = { sendMessage: async (to, text) => sentMessages.push({ to, text }) };
@@ -185,7 +185,7 @@ test('forwarded message uses the group name from the WhatsApp chat', async (t) =
 
 test('each posting is forwarded with its own text, timeout is passed to axios', async (t) => {
   const postMock = t.mock.method(axios, 'post', async (url, body) => ({
-    data: { reason: 'r', summary: 's', odds: '90%', company: 'C' },
+    data: { reason: 'r', summary: 's', odds: 90, company: 'C' },
   }));
   const sentMessages = [];
   const fakeClient = { sendMessage: async (to, text) => sentMessages.push({ to, text }) };

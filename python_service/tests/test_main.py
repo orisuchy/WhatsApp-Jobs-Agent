@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 import main
 
-GOOD = {"odds": "80%", "reason": "התאמה טובה", "company": "Acme", "summary": "מפתח/ת Python"}
+GOOD = {"odds": 80, "reason": "התאמה טובה", "company": "Acme", "summary": "מפתח/ת Python"}
 
 
 def _mock_llm(monkeypatch, content=None, error=None):

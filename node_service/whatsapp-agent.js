@@ -56,7 +56,7 @@ function containsJobKeywords(text, keywords = JOB_KEYWORDS) {
 function formatForwardMessage({ odds, reason, company, summary, originalText, groupName }) {
   const groupLine = groupName ? `*קבוצה:* ${groupName}` : '';
   const lines = [
-    `משרה חדשה! ${odds} התאמה:`,
+    `משרה חדשה! ${odds}% התאמה:`,
     '',
   ];
   if (groupLine) lines.push(groupLine);

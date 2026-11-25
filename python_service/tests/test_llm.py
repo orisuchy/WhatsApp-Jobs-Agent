@@ -7,7 +7,7 @@ import pytest
 from llm import OllamaLLM, OpenAILLM, complete_json, load_llm_client
 from main import JobMatchingResult
 
-GOOD = {"odds": "80%", "reason": "r", "company": "Acme", "summary": "s"}
+GOOD = {"odds": 80, "reason": "r", "company": "Acme", "summary": "s"}
 
 
 class FakeLLM:
@@ -37,7 +37,7 @@ def test_invalid_then_valid_retries_once():
 
 
 def test_schema_invalid_then_valid():
-    assert _run(json.dumps({"odds": "1%"}), json.dumps(GOOD)) == (GOOD, 2)
+    assert _run(json.dumps({"odds": 1}), json.dumps(GOOD)) == (GOOD, 2)
 
 
 def test_invalid_twice_is_no_match():

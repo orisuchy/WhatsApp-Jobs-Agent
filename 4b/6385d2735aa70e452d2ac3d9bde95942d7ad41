@@ -1,0 +1,27 @@
+README.md
+  s_fb3597190d995a::t_bca75d642fac7b 3-6,8,10-31,33,35-37,39-40,42-51,57-58,60,132,143,146,163,184,200-226
+.github/workflows/ci.yml
+  s_fb3597190d995a::t_fe3ec51d77e741 1-24
+.env.example
+  s_fb3597190d995a::t_fe3ec51d77e741 1-6,35-36,40,47-48,54,70-77
+LICENSE
+  s_fb3597190d995a::t_fe3ec51d77e741 1-21
+CONTRIBUTING.md
+  s_fb3597190d995a::t_fe3ec51d77e741 1-30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4b6385d2735aa70e452d2ac3d9bde95942d7ad41",
+  "prompts": {},
+  "sessions": {
+    "s_fb3597190d995a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "56940033-d0a6-41b9-9097-241e29d2de27",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "ori.suchy <ori.suchy@coro.net>"
+    }
+  }
+}

@@ -80,13 +80,19 @@ const STATE_URL = process.env.STATE_URL || ANALYZE_URL.replace(/\/analyze$/, '/s
 const uiState = { status: 'initializing', qr: null, groups: [] };
 
 // Push our state to Python for the web UI; never let a UI failure affect the agent.
-async function pushState(patch) {
+let pushQueue = Promise.resolve();
+function pushState(patch) {
   Object.assign(uiState, patch);
-  try {
-    await axios.post(STATE_URL, uiState, { timeout: 5000 });
-  } catch (err) {
-    log_error('Could not push state to Python: ' + err.message);
-  }
+  const snapshot = { ...uiState };
+  // Serialised so a slow earlier push can't land after (and overwrite) a newer one.
+  pushQueue = pushQueue.then(async () => {
+    try {
+      await axios.post(STATE_URL, snapshot, { timeout: 5000 });
+    } catch (err) {
+      log_error('Could not push state to Python: ' + err.message);
+    }
+  });
+  return pushQueue;
 }
 
 async function pushGroups(client) {
@@ -166,6 +172,7 @@ async function listGroups(client) {
 function start() {
   const client = createClient();
   registerStateEvents(client);
+  pushState({ status: 'initializing', qr: null }); // clears stale UI state after a Node restart
 
   client.on('qr', (qr) => {
     log_info('QR code received, scan to authenticate');

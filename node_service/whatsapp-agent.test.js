@@ -172,3 +172,17 @@ test('a failing state push does not throw', async (t) => {
   t.mock.method(axios, 'post', async () => { throw new Error('down'); });
   await pushState({ status: 'disconnected' });
 });
+
+test('state pushes are delivered in order even when an earlier one is slow', async (t) => {
+  const { pushState } = require('./whatsapp-agent');
+  const order = [];
+  t.mock.method(axios, 'post', async (url, body) => {
+    const status = body.status;
+    await new Promise((r) => setTimeout(r, status === 'qr' ? 30 : 0));
+    order.push(status);
+    return { data: {} };
+  });
+  pushState({ status: 'qr' });
+  await pushState({ status: 'ready' });
+  assert.deepEqual(order, ['qr', 'ready']);
+});

@@ -1,0 +1,29 @@
+.env.example
+  s_f084b00d65f7ff::t_0437b45b2e1749 9,29-33
+  s_f084b00d65f7ff::t_098fac59991b0b 34
+python_service/outputs.py
+  s_f084b00d65f7ff::t_0437b45b2e1749 27,29,58-62,163-179
+python_service/requirements.txt
+  s_f084b00d65f7ff::t_0437b45b2e1749 9
+python_service/tests/test_outputs.py
+  s_f084b00d65f7ff::t_0437b45b2e1749 227-298
+README.md
+  s_f084b00d65f7ff::t_0437b45b2e1749 53,105-122
+  s_f084b00d65f7ff::t_509c7ae12a1e95 123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9adfa1dd11715ab2e33f22d6809d253fef7db070",
+  "prompts": {},
+  "sessions": {
+    "s_f084b00d65f7ff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8ffd800e-aff5-416a-8a89-ce5a5f455d90",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "ori.suchy <ori.suchy@coro.net>"
+    }
+  }
+}

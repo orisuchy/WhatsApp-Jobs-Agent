@@ -8,6 +8,8 @@ from threading import Lock
 from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
+from typing import Literal
+
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
@@ -293,7 +295,7 @@ def analyze(posting: JobPosting) -> dict:
 ui_state = {"status": "initializing", "qr": None, "groups": []}
 
 class UiState(BaseModel):
-    status: str = "initializing"
+    status: Literal["initializing", "qr", "ready", "disconnected", "auth_failure"] = "initializing"
     qr: str | None = None
     groups: list[dict] = []
 

@@ -125,7 +125,14 @@ def read_matches(data_dir: str) -> list[dict]:
         return []
     with _lock, open(path, encoding="utf-8") as f:
         # ponytail: whole file per poll; paginate/sqlite if it grows large
-        return [json.loads(line) for line in reversed(f.read().splitlines()) if line.strip()]
+        lines = [line for line in reversed(f.read().splitlines()) if line.strip()]
+    jobs = []
+    for line in lines:
+        try:
+            jobs.append(json.loads(line))
+        except ValueError:
+            logger.warning("Skipping corrupt line in matches.jsonl")
+    return jobs
 
 def file_output(job: dict) -> None:
     out = os.environ.get("OUTPUT_DIR") or os.path.join(os.environ.get("DATA_DIR") or "data", "outputs")

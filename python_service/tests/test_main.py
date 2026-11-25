@@ -267,3 +267,11 @@ def test_api_jobs_newest_first_and_page_served(monkeypatch, tmp_path):
         assert [j["company"] for j in c.get("/api/jobs").json()] == ["New", "Old"]
         page = c.get("/")
         assert page.status_code == 200 and "Job Agent" in page.text
+
+
+def test_state_rejects_unknown_status_and_corrupt_jobs_line_is_skipped(monkeypatch, tmp_path):
+    monkeypatch.setattr(main, "DATA_DIR", str(tmp_path))
+    (tmp_path / "matches.jsonl").write_text(json.dumps({"company": "A"}) + "\n{broken\n")
+    with TestClient(main.app) as c:
+        assert c.post("/state", json={"status": "bogus"}).status_code == 422
+        assert [j["company"] for j in c.get("/api/jobs").json()] == ["A"]

@@ -21,7 +21,7 @@
 <div id="qr"></div>
 <h2>Matched jobs</h2>
 <div id="jobs"></div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSQX0FslNhTDadL4O5SAGapGt4FodqL8My0mA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
 const el = (tag, text, cls) => { const e = document.createElement(tag); e.textContent = text; if (cls) e.className = cls; return e; };
 let lastQr = null;
@@ -37,6 +37,8 @@ async function refresh() {
       lastQr = s.qr; qr.replaceChildren();
       if (s.qr && window.QRCode) new QRCode(qr, { text: s.qr, width: 256, height: 256 });
     }
+  } catch (e) { document.getElementById('status').textContent = 'unreachable'; return; }
+  try {
     const jobs = await (await fetch('/api/jobs')).json();
     document.getElementById('jobs').replaceChildren(...jobs.map((j) => {
       const d = el('div', '', 'job');
@@ -48,7 +50,7 @@ async function refresh() {
       }
       return d;
     }));
-  } catch (e) { document.getElementById('status').textContent = 'unreachable'; }
+  } catch (e) { /* keep last job list */ }
 }
 refresh(); setInterval(refresh, 5000);
 </script>

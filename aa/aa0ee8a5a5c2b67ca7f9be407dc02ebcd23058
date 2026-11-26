@@ -1,0 +1,39 @@
+python_service/tests/test_manage_jobs.py
+  s_7d87c594663aeb::t_c822d8b8f2c5df 96-126
+.env.example
+  s_7d87c594663aeb::t_c822d8b8f2c5df 68-71
+python_service/tests/test_preferences.py
+  s_7d87c594663aeb::t_75cf8decc7f588 45
+python_service/outputs.py
+  s_7d87c594663aeb::t_c822d8b8f2c5df 164-167,171-177
+  s_7d87c594663aeb::t_89b55d1547bd9d 178-179
+python_service/static/index.html
+  s_7d87c594663aeb::t_c822d8b8f2c5df 280,374-375,574
+python_service/main.py
+  s_7d87c594663aeb::t_c822d8b8f2c5df 383
+README.md
+  s_7d87c594663aeb::t_c822d8b8f2c5df 164
+python_service/settings.py
+  s_7d87c594663aeb::t_c822d8b8f2c5df 19,109-110
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "aaaa0ee8a5a5c2b67ca7f9be407dc02ebcd23058",
+  "prompts": {},
+  "humans": {
+    "h_0890608decf2a3": {
+      "author": "Ori Suchy <orisuchy@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_7d87c594663aeb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f2543413-3646-473d-a711-e1c8522faef3",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Ori Suchy <orisuchy@gmail.com>"
+    }
+  }
+}

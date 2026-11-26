@@ -423,3 +423,10 @@ def test_jobs_etag_returns_304_when_unchanged():
             f.write('{"company": "Acme"}\n')
         r2 = c.get("/api/jobs", headers={"If-None-Match": r.headers["etag"]})
         assert r2.status_code == 200 and r2.json()[0]["company"] == "Acme"
+
+
+def test_put_settings_rejects_bad_auto_hide_days(monkeypatch, tmp_path):
+    monkeypatch.setattr(main, "DATA_DIR", str(tmp_path))
+    with TestClient(main.app) as c:
+        assert c.put("/api/settings", json={"AUTO_HIDE_DAYS": "0"}).status_code == 422
+        assert c.put("/api/settings", json={"AUTO_HIDE_DAYS": "30"}).status_code == 200

@@ -1,0 +1,26 @@
+python_service/outputs.py
+  s_7d87c594663aeb::t_a77b8fcc26b732 175-176
+python_service/static/index.html
+  s_7d87c594663aeb::t_a77b8fcc26b732 574
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cc6c1a68085021a0b9af50efe815b3fcd8578a84",
+  "prompts": {},
+  "humans": {
+    "h_0890608decf2a3": {
+      "author": "Ori Suchy <orisuchy@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_7d87c594663aeb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f2543413-3646-473d-a711-e1c8522faef3",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Ori Suchy <orisuchy@gmail.com>"
+    }
+  }
+}

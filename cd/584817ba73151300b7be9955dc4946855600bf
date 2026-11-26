@@ -1,0 +1,37 @@
+python_service/tests/test_export_csv.py
+  s_e39bd4c1fae1d5::t_1fec0e1cb04a59 53-60
+  s_e39bd4c1fae1d5::t_b34255fa03f814 1-40
+  s_e39bd4c1fae1d5::t_ba37c4c62cffc2 41-52
+python_service/main.py
+  s_e39bd4c1fae1d5::t_9d9a61cbb80aca 401-406
+  s_e39bd4c1fae1d5::t_ea5c0786b1a49f 16
+python_service/static/index.html
+  s_e39bd4c1fae1d5::t_9c85271f7c5439 150
+python_service/outputs.py
+  s_e39bd4c1fae1d5::t_fdebc13eb24e06 174-178,186-190
+  s_e39bd4c1fae1d5::t_de7f3214878ecc 2,4
+  s_e39bd4c1fae1d5::t_424f7899eca122 168-173,179-185,191-193
+README.md
+  s_e39bd4c1fae1d5::t_50a85ca6296071 140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cd584817ba73151300b7be9955dc4946855600bf",
+  "prompts": {},
+  "humans": {
+    "h_0890608decf2a3": {
+      "author": "Ori Suchy <orisuchy@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_e39bd4c1fae1d5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6edbe532-fd42-4135-8a7d-5b497a47f2a3",
+        "model": "claude-haiku-5-5"
+      },
+      "human_author": "Ori Suchy <orisuchy@gmail.com>"
+    }
+  }
+}

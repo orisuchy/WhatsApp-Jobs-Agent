@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Job Agent</title>
-<link rel="icon" href="data:,">
+<link rel="icon" type="image/png" href="/logo.png">
 <style>
   :root {
     color-scheme: light dark;
@@ -31,7 +31,7 @@
 
   header { position: sticky; top: 0; z-index: 5; background: var(--card); border-bottom: 1px solid var(--line); }
   .bar { max-width: 860px; margin: auto; padding: .55rem 1rem 0; display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1rem; }
-  .bar h1 { font-size: 1.1rem; }
+  .bar h1 { font-size: 1.1rem; display: flex; align-items: center; gap: .4rem; }
   nav { display: flex; gap: .25rem; width: 100%; }
   nav a { padding: .45rem .8rem; text-decoration: none; color: var(--muted); border-bottom: 2px solid transparent; font-weight: 600; }
   nav a[aria-current] { color: var(--accent); border-color: var(--accent); }
@@ -125,7 +125,7 @@
 <body>
 <header>
   <div class="bar">
-    <h1>Job Agent</h1>
+    <h1><img src="/logo.png" alt="" width="28" height="28">Job Agent</h1>
     <span id="pill" class="pill" role="status">Connecting…</span>
     <nav aria-label="Sections">
       <a href="#dashboard">Dashboard</a><a href="#settings">Settings</a><a href="#profile">Profile</a>

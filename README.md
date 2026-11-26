@@ -1,3 +1,5 @@
+<p align="center"><img src="python_service/static/logo.png" alt="Job Agent logo" width="128"></p>
+
 # Job Agent
 
 **Stop scrolling through WhatsApp job groups.** Job Agent reads the job groups you choose, has an

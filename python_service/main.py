@@ -655,3 +655,7 @@ def put_job_description(jd: JobDescription) -> dict:
 @app.get("/")
 def index():
     return FileResponse(os.path.join(os.path.dirname(__file__), "static", "index.html"))
+
+@app.get("/logo.png")
+def logo():
+    return FileResponse(os.path.join(os.path.dirname(__file__), "static", "logo.png"))

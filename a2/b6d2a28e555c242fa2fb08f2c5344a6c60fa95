@@ -1,0 +1,32 @@
+python_service/static/index.html
+  s_5b2d5cec790d83::t_5ded80d5dfcb8b 7
+  s_5b2d5cec790d83::t_0d0b5ee0bc1cd5 34
+  s_5b2d5cec790d83::t_d72d62f6646df4 128
+python_service/main.py
+  s_5b2d5cec790d83::t_90a8c5a32a10ac 658-661
+python_service/tests/test_main.py
+  s_5b2d5cec790d83::t_43ed146336e0e4 270-271
+README.md
+  s_5b2d5cec790d83::t_b86ec92dacb335 1-2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a2b6d2a28e555c242fa2fb08f2c5344a6c60fa95",
+  "prompts": {},
+  "humans": {
+    "h_0890608decf2a3": {
+      "author": "Ori Suchy <orisuchy@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_5b2d5cec790d83": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8cb170ac-3f8a-4702-9ca4-09fd9a198848",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Ori Suchy <orisuchy@gmail.com>"
+    }
+  }
+}

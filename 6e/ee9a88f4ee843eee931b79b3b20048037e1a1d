@@ -1,0 +1,28 @@
+python_service/tests/test_reminders.py
+  s_06a66aa8a5ae06::t_a2fe8e03382f32 86-101
+python_service/main.py
+  s_06a66aa8a5ae06::t_a2fe8e03382f32 459-460
+python_service/outputs.py
+  s_06a66aa8a5ae06::t_a2fe8e03382f32 235-249
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6eee9a88f4ee843eee931b79b3b20048037e1a1d",
+  "prompts": {},
+  "humans": {
+    "h_0890608decf2a3": {
+      "author": "Ori Suchy <orisuchy@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_06a66aa8a5ae06": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "691bdb44-48f4-4eb3-a889-90f549977aca",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Ori Suchy <orisuchy@gmail.com>"
+    }
+  }
+}

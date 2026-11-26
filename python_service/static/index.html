@@ -623,7 +623,9 @@ $('rmdlg').onclose = async () => {
   let saved = false;
   if (why) try {
     await api('/api/not-for-me', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: why }) });
-    saved = true; loadSettings();  // keeps unsaved Settings edits (draft)
+    saved = true;
+    if ('SCORING_NOTES' in draft) draft.SCORING_NOTES = draft.SCORING_NOTES.replace(/\s+$/, '') + (draft.SCORING_NOTES.trim() ? '\n' : '') + '- Not for me: ' + why.split(/\s+/).join(' ');  // an unsaved edit must not drop the new line on Save
+    loadSettings();  // keeps unsaved Settings edits (draft)
   } catch (e) { toast('Could not save your reason: ' + e.message, 'bad'); }
   const tail = saved ? ' Your reason was added to Settings → Scoring preferences.' : '';
   if (act === 'hide') return patchJob(j, { hidden: true }, 'Hidden. Find it under "Hidden jobs".' + tail);

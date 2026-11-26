@@ -582,6 +582,7 @@ def put_settings(patch: dict) -> dict:
         except ValueError as e:
             raise HTTPException(422, str(e))
         reload_settings()
+    outputs.warn_missing_config()  # else a destination switched off by a bad setting is silent until restart
     return settings.public()
 
 MAX_CV_BYTES = 10 * 1024 * 1024

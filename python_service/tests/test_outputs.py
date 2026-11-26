@@ -302,3 +302,15 @@ def test_sheets_selects_tab_and_uses_service_account(monkeypatch, tmp_path):
 
     monkeypatch.delenv("GOOGLE_SHEET_TAB")
     assert outputs._open_worksheet() is book.sheet1
+
+
+def test_key_file_strips_quotes_and_falls_back_to_data_dir(tmp_path, monkeypatch):
+    (tmp_path / "sheet-key.json").write_text("{}")
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("GOOGLE_SHEET_ID", "s")
+    # a host path with quotes, as pasted into the UI
+    monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_FILE", "'/Users/me/job-agent/data/sheet-key.json'")
+    assert outputs.key_file() == str(tmp_path / "sheet-key.json")
+    assert outputs.missing_config("sheets") == []
+    monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_FILE", "/elsewhere/other.json")
+    assert outputs.missing_config("sheets")

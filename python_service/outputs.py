@@ -56,11 +56,18 @@ def requested_outputs() -> list[str]:
             logger.error("Unknown OUTPUTS entry %r ignored (known: %s)", n, ", ".join(known))
     return [n for n in names if n in known]
 
+def key_file() -> str:
+    """GOOGLE_SERVICE_ACCOUNT_FILE without quotes; a path that doesn't exist here (e.g. a host path pasted
+    into the UI) falls back to the same file name in DATA_DIR."""
+    key = (os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE") or "").strip().strip("'\"")
+    in_data = os.path.join(os.environ.get("DATA_DIR") or "", os.path.basename(key))
+    return in_data if key and not os.path.isfile(key) and os.path.isfile(in_data) else key
+
 def missing_config(name: str) -> list[str]:
     missing = [v for v in REQUIRED_ENV.get(name, ()) if not os.environ.get(v)]
-    key = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE")
+    key = key_file()
     if name == "sheets" and key and not os.path.isfile(key):
-        missing.append(f"GOOGLE_SERVICE_ACCOUNT_FILE (no such file: {key})")
+        missing.append(f"GOOGLE_SERVICE_ACCOUNT_FILE (no such file: {key}; put the key in the data folder)")
     return missing
 
 def enabled_outputs() -> list[str]:
@@ -346,7 +353,7 @@ def _email_send(subject: str, text: str) -> None:
 def _open_worksheet():
     import gspread  # lazy: only needed when `sheets` is enabled
 
-    sheet = gspread.service_account(filename=os.environ["GOOGLE_SERVICE_ACCOUNT_FILE"]).open_by_key(os.environ["GOOGLE_SHEET_ID"])
+    sheet = gspread.service_account(filename=key_file()).open_by_key(os.environ["GOOGLE_SHEET_ID"])
     tab = os.environ.get("GOOGLE_SHEET_TAB")
     return sheet.worksheet(tab) if tab else sheet.sheet1
 

@@ -456,7 +456,8 @@ _reminders_started = False
 
 def check_reminders() -> None:
     for job in outputs.due_reminders(DATA_DIR):
-        outputs.update_job(DATA_DIR, job["id"], {"remind_at": ""})  # cleared first: at most once, never re-sent
+        if not outputs.clear_reminder(DATA_DIR, job["id"], job["remind_at"]):  # first: at most once, never re-sent
+            continue  # the user changed or cleared it since we read it
         text = outputs.reminder_text(job)
         outputs.send_reminder(text)
         target = os.environ.get("TARGET_GROUP_ID")

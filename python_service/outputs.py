@@ -232,6 +232,21 @@ def due_reminders(data_dir: str) -> list[dict]:
             pass  # unparseable or naive time: never fires
     return due
 
+def clear_reminder(data_dir: str, job_id: str, due: str) -> bool:
+    """Clear remind_at only if it is still the value that was due; a reminder set meanwhile is kept."""
+    with _lock:
+        state = _state(data_dir)
+        entry = state.get(job_id, {})
+        if entry.get("remind_at") != due:
+            return False
+        entry.pop("remind_at")
+        if entry:
+            state[job_id] = entry
+        else:
+            state.pop(job_id)
+        _write(os.path.join(data_dir, STATE_FILE), json.dumps(state, ensure_ascii=False))
+    return True
+
 def reminder_text(job: dict) -> str:
     lines = [f"⏰ Reminder: {job.get('company') or 'Unknown'} ({job.get('score')}%)", job.get("summary") or ""]
     if job.get("note"):

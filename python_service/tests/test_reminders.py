@@ -83,3 +83,19 @@ def test_send_reminder_uses_helpers_and_one_failure_does_not_block(monkeypatch):
     monkeypatch.setattr(outputs, "_email_send", lambda subject, text: calls.append(("email", text)))
     outputs.send_reminder("⏰ hello")
     assert calls == [("telegram", "⏰ hello"), ("email", "⏰ hello")]
+
+
+def test_reminder_set_meanwhile_is_kept(monkeypatch, tmp_path):
+    jid = _setup(monkeypatch, tmp_path)
+    sent = []
+    monkeypatch.setattr(outputs, "send_reminder", sent.append)
+    old, new = _iso(-1), _iso(5)
+    outputs.update_job(str(tmp_path), jid, {"remind_at": old})
+    due = outputs.due_reminders(str(tmp_path))
+    outputs.update_job(str(tmp_path), jid, {"remind_at": new})  # user re-sets it after the checker read
+    assert outputs.clear_reminder(str(tmp_path), jid, due[0]["remind_at"]) is False
+    assert outputs.read_matches(str(tmp_path))[0]["remind_at"] == new
+    monkeypatch.setattr(outputs, "due_reminders", lambda d: due)  # checker acting on its stale read
+    main.check_reminders()
+    assert sent == [] and main.pending_whatsapp == []
+    assert outputs.read_matches(str(tmp_path))[0]["remind_at"] == new

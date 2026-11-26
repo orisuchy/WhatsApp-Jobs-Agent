@@ -1,5 +1,6 @@
 """Scoring preferences (weights, hard rejects, notes) and the home-distance limit."""
 import json
+import os
 from unittest.mock import MagicMock
 
 import pytest
@@ -106,3 +107,23 @@ def test_analyze_applies_distance_and_stores_location(monkeypatch, places):
         client.complete.return_value = json.dumps({"odds": 90, "reason": "r", "company": "Far", "summary": "s",
                                                    "location": "Haifa", "work_mode": "onsite"})
         assert c.post("/analyze", json={"text": "Python dev in Haifa"}).json()["forward"] is False
+
+
+def test_not_for_me_appends_to_notes_and_reaches_the_prompt(monkeypatch):
+    import main
+    from fastapi.testclient import TestClient
+    monkeypatch.setenv("SCORING_NOTES", "")
+    with TestClient(main.app) as c:
+        assert c.post("/api/not-for-me", json={"reason": "  night   shifts\n"}).status_code == 200
+        assert os.environ["SCORING_NOTES"] == "- Not for me: night shifts"
+        assert c.post("/api/not-for-me", json={"reason": "agencies"}).status_code == 200
+        assert os.environ["SCORING_NOTES"] == "- Not for me: night shifts\n- Not for me: agencies"
+    assert "- Not for me: agencies" in main.build_messages("post", "", "cv")[0]["content"]
+
+
+def test_not_for_me_rejects_empty_and_too_long():
+    import main
+    from fastapi.testclient import TestClient
+    with TestClient(main.app) as c:
+        for bad in ("", "   ", "x" * 301):
+            assert c.post("/api/not-for-me", json={"reason": bad}).status_code == 422

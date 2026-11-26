@@ -410,6 +410,26 @@ def api_update_job(body: JobUpdate, job_id: str = JOB_ID):
     return {"ok": True}
 
 
+class NotForMe(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=300)
+
+
+@app.post("/api/not-for-me")
+def not_for_me(body: NotForMe) -> dict:
+    """Append the user's reason to SCORING_NOTES, so similar postings score lower from now on."""
+    reason = " ".join(body.reason.split())
+    if not reason:
+        raise HTTPException(422, "Reason is empty")
+    with llm_lock:
+        notes = (os.environ.get("SCORING_NOTES") or "").rstrip()
+        try:
+            settings.save(DATA_DIR, {"SCORING_NOTES": (notes + "\n" if notes else "") + f"- Not for me: {reason}"})
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+        reload_settings()
+    return {"ok": True}
+
+
 @app.delete("/api/jobs/{job_id}")
 def api_remove_job(job_id: str = JOB_ID, allow_again: bool = False):
     if not outputs.remove_job(DATA_DIR, job_id, allow_again):

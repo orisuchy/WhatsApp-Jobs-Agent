@@ -134,7 +134,9 @@ you. Matches also appear on the **Dashboard**, newest first.
   summary, why it matches, the group, and the original posting.
 - **Keep track of a job:** on its card, **Add note** (who to call, when you applied…; saved
   automatically), **Hide** it (find it again under *Hidden jobs*), or **Remove…** it. When removing,
-  you choose whether the same posting should show up again if someone reposts it.
+  you choose whether the same posting should show up again if someone reposts it. Hiding or
+  removing asks "Not for you? Why" (optional): your answer is added to your scoring preferences,
+  so similar postings score lower from now on.
 - **Star a job:** click the ☆ on its card. Starred jobs stay at the top of the list.
 - **Track your application:** pick *Interested*, *Applied*, *Interview*, *Offer* or *Rejected* on a card, and use the status filter above the list to see only those.
 - **Export your list:** click **Export CSV** next to the job count to download all your matches, with your notes, statuses and stars, as a file you can open in Excel or Google Sheets.
@@ -182,6 +184,8 @@ a big seniority gap (e.g. junior vs. team lead).
 
 **Anything else that matters to you:** write it in plain words, in any language. For example:
 *"No recruitment agencies. Prefer startups. No night shifts."*
+When you hide or remove a job and say why, that reason is added here as a line starting with
+*Not for me:*. You can edit or delete these lines like any other text.
 
 ### Location
 

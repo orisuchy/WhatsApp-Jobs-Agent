@@ -162,9 +162,13 @@
       <form method="dialog">
         <h2 id="rmtitle">Remove this job?</h2>
         <p id="rmname" class="muted" dir="auto"></p>
-        <label class="check"><input type="checkbox" id="rmagain"> Show it again if someone posts it again</label>
-        <p class="help">If you leave this off, the same posting is ignored when it shows up again in any group. Your note on it is deleted too.</p>
-        <div class="row"><button value="cancel">Cancel</button><button value="remove" class="primary">Remove</button></div>
+        <label class="field"><span>Not for you? Why <span class="muted">(optional)</span></span><input id="rmwhy" maxlength="300" dir="auto" placeholder="e.g. Recruitment agency, night shifts"></label>
+        <p class="help">Added to your scoring preferences in Settings, where you can edit it.</p>
+        <div id="rmagainrow">
+          <label class="check"><input type="checkbox" id="rmagain"> Show it again if someone posts it again</label>
+          <p class="help">If you leave this off, the same posting is ignored when it shows up again in any group. Your note on it is deleted too.</p>
+        </div>
+        <div class="row"><button value="cancel">Cancel</button><button value="go" id="rmgo" class="primary">Remove</button></div>
       </form>
     </dialog>
   </section>
@@ -574,8 +578,8 @@ function renderJobs() {
         h('select', { 'aria-label': 'Application status', onchange: (e) => patchJob(j, { status: e.target.value }, 'Status saved.') },
           ...STATUSES.map(([v, l]) => h('option', { value: v, textContent: l, selected: (j.status || '') === v }))),
         !j.note && h('button', { type: 'button', textContent: 'Add note', onclick: (e) => { const b = noteBoxes.get(j.id); b.hidden = false; b.querySelector('textarea').focus(); e.target.remove(); } }),
-        h('button', { type: 'button', textContent: j.hidden ? 'Unhide' : 'Hide', onclick: () => patchJob(j, { hidden: !j.hidden }, j.hidden ? 'Moved back to active jobs.' : 'Hidden. Find it under "Hidden jobs".') }),
-        h('button', { type: 'button', className: 'rm', textContent: 'Remove…', onclick: () => askRemove(j) })));
+        h('button', { type: 'button', textContent: j.hidden ? 'Unhide' : 'Hide…', onclick: () => j.hidden ? patchJob(j, { hidden: false }, 'Moved back to active jobs.') : askWhy(j, 'hide') }),
+        h('button', { type: 'button', className: 'rm', textContent: 'Remove…', onclick: () => askWhy(j, 'remove') })));
   });
   if (hit.length > MAX_JOBS) cards.push(h('p', { className: 'empty', textContent: `Showing the newest ${MAX_JOBS}. Use the search to find older matches.` }));
   for (const [id, old] of drafts) {  // only text the user typed and not yet saved
@@ -602,19 +606,31 @@ async function patchJob(j, change, msg) {
     if ('hidden' in change || 'starred' in change || 'status' in change) renderJobs();
   } catch (e) { toast('Could not save: ' + e.message, 'bad'); }
 }
-let rmJob = null;
-function askRemove(j) {
-  rmJob = j; $('rmagain').checked = false;
+let rmJob = null, rmAct = '';
+$('rmwhy').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); $('rmgo').click(); } };  // Enter would hit Cancel, the first button
+function askWhy(j, act) {
+  rmJob = j; rmAct = act; $('rmagain').checked = false; $('rmwhy').value = '';
+  const verb = act === 'hide' ? 'Hide' : 'Remove';
+  $('rmtitle').textContent = verb + ' this job?'; $('rmgo').textContent = verb;
+  $('rmagainrow').hidden = act !== 'remove';
   $('rmname').textContent = [j.company, j.summary].filter(Boolean).join(' — ');
   $('rmdlg').showModal();
 }
 $('rmdlg').onclose = async () => {
-  const j = rmJob; rmJob = null;
-  if (!j || $('rmdlg').returnValue !== 'remove') return;
+  const j = rmJob, act = rmAct; rmJob = null;
+  if (!j || $('rmdlg').returnValue !== 'go') return;
+  const why = $('rmwhy').value.trim(), again = $('rmagain').checked;
+  let saved = false;
+  if (why) try {
+    await api('/api/not-for-me', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: why }) });
+    saved = true; loadSettings();  // keeps unsaved Settings edits (draft)
+  } catch (e) { toast('Could not save your reason: ' + e.message, 'bad'); }
+  const tail = saved ? ' Your reason was added to Settings → Scoring preferences.' : '';
+  if (act === 'hide') return patchJob(j, { hidden: true }, 'Hidden. Find it under "Hidden jobs".' + tail);
   try {
-    await api(`/api/jobs/${j.id}?allow_again=${$('rmagain').checked}`, { method: 'DELETE' });
+    await api(`/api/jobs/${j.id}?allow_again=${again}`, { method: 'DELETE' });
     jobs = jobs.filter((x) => x.id !== j.id); renderJobs();
-    toast($('rmagain').checked ? 'Removed. It will show up again if it is reposted.' : 'Removed. Reposts of it will be ignored.');
+    toast((again ? 'Removed. It will show up again if it is reposted.' : 'Removed. Reposts of it will be ignored.') + tail);
   } catch (e) { toast('Could not remove: ' + e.message, 'bad'); }
 };
 $('jq').oninput = $('jmin').onchange = $('jview').onchange = $('jstatus').onchange = renderJobs;

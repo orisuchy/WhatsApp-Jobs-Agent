@@ -1,0 +1,41 @@
+python_service/static/index.html
+  s_f0b3d055912f99::t_6254b8c6956385 564-566,568-569,572,574-585,588-601,603-606
+  s_f0b3d055912f99::t_06ec16092aae48 547-552
+  s_f0b3d055912f99::t_9df9dc48bc31e8 567
+  s_f0b3d055912f99::t_29cc76252f2544 586-587,602
+  s_f0b3d055912f99::t_42d967238138ff 671-672
+  s_f0b3d055912f99::t_30ac61bb06035a 102-106
+  s_f0b3d055912f99::t_21ae33609a0e92 155,159-167
+python_service/outputs.py
+  s_f0b3d055912f99::t_410f3888997f59 128-144,146,153,157,160-162,165-209
+  s_f0b3d055912f99::t_c92b421f66a37d 210
+README.md
+  s_f0b3d055912f99::t_ce211bff1f0f35 135-137
+python_service/main.py
+  s_f0b3d055912f99::t_3d5a17e12cac62 15
+  s_f0b3d055912f99::t_4087f8bb459de2 376-383,389-409
+  s_f0b3d055912f99::t_91673f8c511c38 410
+python_service/tests/test_manage_jobs.py
+  s_f0b3d055912f99::t_48686efb8ce32e 1-59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1ddf7b44801f49a62b84eeb589a58587b40cea5e",
+  "prompts": {},
+  "humans": {
+    "h_0890608decf2a3": {
+      "author": "Ori Suchy <orisuchy@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_f0b3d055912f99": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0ae6c7fd-7e45-4536-ba8e-74fd39250ca1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Ori Suchy <orisuchy@gmail.com>"
+    }
+  }
+}

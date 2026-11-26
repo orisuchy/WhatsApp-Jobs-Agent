@@ -229,9 +229,11 @@ function start() {
     log_error('Authentication failure: ' + msg);
   });
 
-  client.on('disconnected', async () => {
-    log_info('WhatsApp client disconnected.');
-    client.sendMessage((await getConfig()).targetGroupId, "************ Client Off ************");
+  client.on('disconnected', async (reason) => {
+    // whatsapp-web.js doesn't reconnect: exit and let Docker (restart: unless-stopped) start a fresh client
+    log_error(`WhatsApp client disconnected (${reason}); restarting.`);
+    await pushState({});
+    process.exit(1);
   });
 
   client.on('message', (message) => {

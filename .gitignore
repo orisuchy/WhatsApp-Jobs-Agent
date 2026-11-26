@@ -17,3 +17,4 @@ data/
 .superpowers/
 .claude/settings.local.json
 .scratch/
+.playwright-mcp/

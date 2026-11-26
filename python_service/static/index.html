@@ -4,135 +4,571 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Job Agent</title>
+<link rel="icon" href="data:,">
 <style>
-  body { font: 15px/1.4 system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
-  #status { padding: .5rem .8rem; border-radius: 6px; background: #eee; display: inline-block; }
-  #status.ready { background: #c8f0cf; } #status.qr { background: #ffe9a8; }
-  #status.disconnected, #status.auth_failure { background: #f7c6c6; }
-  #qr { margin: 1rem 0; }
-  .job { border: 1px solid #ddd; border-radius: 8px; padding: .8rem 1rem; margin: .8rem 0; }
-  .job h3 { margin: 0 0 .3rem; } .meta { color: #666; font-size: 13px; }
-  fieldset { margin: .8rem 0; } label { display: block; margin: .3rem 0; } label.f input:not([type=checkbox]), label.f select { display: block; width: 100%; box-sizing: border-box; }
-  textarea { width: 100%; min-height: 8rem; box-sizing: border-box; } #msg { margin-left: .5rem; }
-  pre { white-space: pre-wrap; background: #f6f6f6; padding: .5rem; border-radius: 6px; }
+  :root {
+    color-scheme: light dark;
+    --bg: #f5f6f8; --card: #fff; --text: #1a1f2b; --muted: #5a6373; --line: #dde1e8; --hover: #eef1f5;
+    --accent: #0d6b5c; --accent-fg: #fff;
+    --ok-bg: #dcf5e6; --ok-fg: #0f5c35; --warn-bg: #fff0c7; --warn-fg: #6f4a00; --bad-bg: #fde2e2; --bad-fg: #961b1b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --card: #1b2028; --text: #e8ebf0; --muted: #a0a9b9; --line: #2f3643; --hover: #252c38;
+      --accent: #41cdb3; --accent-fg: #05241e;
+      --ok-bg: #143b27; --ok-fg: #86e3ad; --warn-bg: #40300a; --warn-fg: #ffd67d; --bad-bg: #4a1818; --bad-fg: #ffb0b0;
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+  h1, h2, h3, p { margin: 0; }
+  h2 { font-size: 1.05rem; } h3 { font-size: 1rem; }
+  a { color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .muted, .help { color: var(--muted); font-size: 13px; }
+  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+  header { position: sticky; top: 0; z-index: 5; background: var(--card); border-bottom: 1px solid var(--line); }
+  .bar { max-width: 860px; margin: auto; padding: .55rem 1rem 0; display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1rem; }
+  .bar h1 { font-size: 1.1rem; }
+  nav { display: flex; gap: .25rem; width: 100%; }
+  nav a { padding: .45rem .8rem; text-decoration: none; color: var(--muted); border-bottom: 2px solid transparent; font-weight: 600; }
+  nav a[aria-current] { color: var(--accent); border-color: var(--accent); }
+  nav a.dirty::after { content: " •"; color: var(--warn-fg); }
+  .pill { margin-left: auto; padding: .15rem .7rem; border-radius: 99px; font-size: 13px; font-weight: 600; background: var(--hover); color: var(--muted); }
+  .pill::before { content: "● "; }
+
+  main { max-width: 860px; margin: auto; padding: 1rem; display: grid; gap: 1rem; }
+  main > section { display: grid; gap: 1rem; }
+  .card, fieldset.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 1rem; margin: 0; min-width: 0; display: grid; gap: .8rem; scroll-margin-top: 6.5rem; }
+  fieldset.card > legend { float: left; width: 100%; padding: 0; font-weight: 700; font-size: 1.05rem; }
+  fieldset.card > legend + * { clear: both; }
+
+  input, select, textarea, button { font: inherit; color: inherit; }
+  input:not([type=checkbox], [type=radio], [type=file]), select, textarea { width: 100%; padding: .45rem .6rem; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); }
+  input[aria-invalid=true] { border-color: var(--bad-fg); }
+  input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 1.05rem; height: 1.05rem; flex: none; margin: 0; }
+  textarea { min-height: 10rem; resize: vertical; }
+  button, .btn { padding: .45rem .9rem; border: 1px solid var(--line); border-radius: 7px; background: var(--card); cursor: pointer; font-weight: 600; }
+  button:hover:not(:disabled) { background: var(--hover); }
+  button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+  button.primary:hover:not(:disabled) { filter: brightness(1.1); background: var(--accent); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.link { border: 0; background: none; padding: 0; color: var(--accent); text-decoration: underline; font-weight: 500; }
+  .field { display: grid; gap: .2rem; align-content: start; } .field > label { font-weight: 600; font-size: 14px; }
+  .err { color: var(--bad-fg); font-size: 13px; font-weight: 600; } .err:empty { display: none; }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: .8rem; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .8rem; }
+  .check { display: flex; align-items: center; gap: .5rem; cursor: pointer; }
+
+  .ptools { font-size: 13px; color: var(--muted); } .ptools .count { font-weight: 700; color: var(--text); margin-right: auto; }
+  .plist { max-height: 300px; overflow-y: auto; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); }
+  .plist.single { max-height: 190px; }
+  .plist label { display: flex; align-items: center; gap: .6rem; padding: .4rem .6rem; cursor: pointer; border-bottom: 1px solid var(--line); }
+  .plist label:last-child { border-bottom: 0; }
+  .plist label:hover { background: var(--hover); }
+  .plist label:has(input:checked) { background: var(--ok-bg); color: var(--ok-fg); font-weight: 600; }
+  .plist span { overflow-wrap: anywhere; min-width: 0; } .plist small { margin-left: auto; font-weight: 400; opacity: .8; white-space: nowrap; }
+  .plist p { padding: .8rem; }
+
+  .out { border: 1px solid var(--line); border-radius: 8px; padding: .7rem .8rem; display: grid; gap: .8rem; }
+  .out > div { display: grid; gap: .8rem; padding-top: .8rem; border-top: 1px solid var(--line); }
+
+  .ctx { border-radius: 8px; padding: .7rem .9rem; display: grid; gap: .35rem; border: 1px solid var(--line); }
+  .ctx.ok, .ctx.warn, .ctx.bad { border-color: transparent; }
+  .meter { height: 8px; border-radius: 4px; background: color-mix(in srgb, currentColor 20%, transparent); overflow: hidden; }
+  .meter i { display: block; height: 100%; background: currentColor; }
+  .ctx small { opacity: .85; }
+
+  #qrbox { display: grid; justify-items: center; gap: .8rem; text-align: center; }
+  #qr { background: #fff; padding: 14px; border-radius: 10px; line-height: 0; } #qr img, #qr canvas { max-width: 100%; height: auto; }
+  #qrbox ol { text-align: left; margin: 0; padding-left: 1.3rem; }
+  .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: .3rem; }
+  .steps a { display: flex; gap: .6rem; padding: .45rem .6rem; border-radius: 7px; text-decoration: none; color: var(--text); }
+  .steps a:hover { background: var(--hover); }
+  .steps b { flex: none; width: 1.5rem; height: 1.5rem; border-radius: 50%; display: grid; place-items: center; font-size: 13px; border: 2px solid var(--line); color: var(--muted); }
+  .steps .done b { background: var(--ok-bg); color: var(--ok-fg); border-color: transparent; }
+  .steps .done span { color: var(--muted); }
+
+  .filters input { flex: 1 1 12rem; } .filters select { flex: 0 0 auto; width: auto; }
+  .job { gap: .5rem; } .job header { position: static; background: none; border: 0; display: flex; gap: .7rem; align-items: center; }
+  .job h3 { overflow-wrap: anywhere; min-width: 0; flex: 1; }
+  .score { flex: none; min-width: 3.1rem; text-align: center; padding: .2rem .5rem; border-radius: 8px; font-weight: 700; background: var(--hover); color: var(--muted); }
+  .job p, pre { overflow-wrap: anywhere; } .job .why { border-inline-start: 3px solid var(--line); padding-inline-start: .7rem; }
+  summary { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 600; }
+  pre { white-space: pre-wrap; font: inherit; font-size: 14px; background: var(--bg); padding: .7rem; border-radius: 7px; margin: .5rem 0 0; }
+  .empty { text-align: center; color: var(--muted); padding: 2rem 1rem; }
+
+  .drop { display: grid; justify-items: center; gap: .3rem; padding: 1.4rem 1rem; border: 2px dashed var(--line); border-radius: 10px; text-align: center; cursor: pointer; }
+  .drop:hover, .drop.over, .drop:focus-within { border-color: var(--accent); background: var(--hover); }
+  .drop.busy { cursor: progress; border-style: solid; }
+  .spin { display: inline-block; width: 1.4rem; height: 1.4rem; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spin { animation-duration: 4s; } }
+
+  #savebar { position: sticky; bottom: 0; z-index: 5; background: var(--card); border-top: 1px solid var(--line); box-shadow: 0 -4px 14px rgb(0 0 0 / .08); }
+  #savebar > div { max-width: 860px; margin: auto; padding: .6rem 1rem; }
+  #savemsg { flex: 1 1 12rem; font-size: 14px; min-width: 0; }
+  #toasts { position: fixed; top: 4.2rem; right: 1rem; left: 1rem; z-index: 9; display: grid; gap: .5rem; justify-items: end; pointer-events: none; }
+  .toast { max-width: 26rem; padding: .6rem .9rem; border-radius: 8px; font-weight: 600; box-shadow: 0 4px 14px rgb(0 0 0 / .2); overflow-wrap: anywhere; }
+  /* state colours last, so they win over component defaults */
+  .ok { background: var(--ok-bg); color: var(--ok-fg); } .warn { background: var(--warn-bg); color: var(--warn-fg); } .bad { background: var(--bad-bg); color: var(--bad-fg); }
 </style>
 </head>
 <body>
-<h1>Job Agent</h1>
-<p>WhatsApp: <span id="status">…</span> <span id="groups" class="meta"></span></p>
-<div id="qr"></div>
-<h2>Settings</h2>
-<form id="settings"></form>
-<h2>Profile</h2>
-<p class="meta" id="profile-mode"></p>
-<p><label>CV (PDF): <input type="file" id="cv" accept="application/pdf"></label>
-<button id="cv-save" type="button">Upload CV</button></p>
-<textarea id="jd" placeholder="Describe the job you are looking for"></textarea>
-<p><button id="jd-save" type="button">Save job description</button></p>
-<h2>Matched jobs</h2>
-<div id="jobs"></div>
+<header>
+  <div class="bar">
+    <h1>Job Agent</h1>
+    <span id="pill" class="pill" role="status">Connecting…</span>
+    <nav aria-label="Sections">
+      <a href="#dashboard">Dashboard</a><a href="#settings">Settings</a><a href="#profile">Profile</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <section id="tab-dashboard">
+    <div class="ctxhost" data-compact="1"></div>
+    <div class="card" id="conn" hidden>
+      <p id="connmsg"></p>
+      <div id="qrbox" hidden>
+        <h2>Scan to connect WhatsApp</h2>
+        <div id="qr" role="img" aria-label="WhatsApp QR code"></div>
+        <ol><li>Open <b>WhatsApp</b> on your phone</li><li>Go to <b>Settings → Linked devices → Link a device</b></li><li>Point the phone at this code</li></ol>
+        <p class="muted">The code refreshes by itself. This page updates once you are connected.</p>
+      </div>
+    </div>
+    <div class="card" id="setup" hidden></div>
+    <div class="card">
+      <div class="row"><h2>Matched jobs</h2><span id="jobcount" class="muted"></span></div>
+      <div class="row filters">
+        <input id="jq" type="search" placeholder="Search company, text, group…" aria-label="Search matched jobs">
+        <select id="jmin" aria-label="Minimum score">
+          <option value="0">Any score</option><option value="60">60% and up</option><option value="70">70% and up</option><option value="80">80% and up</option><option value="90">90% and up</option>
+        </select>
+      </div>
+    </div>
+    <div id="jobs" style="display:grid;gap:1rem"></div>
+  </section>
+  <section id="tab-settings" hidden>
+    <form id="settings" style="display:grid;gap:1rem" novalidate><p class="card muted">Loading settings…</p></form>
+  </section>
+  <section id="tab-profile" hidden>
+    <div class="card">
+      <h2>Your profile</h2>
+      <p>Matching against: <b id="mode">…</b></p>
+      <p class="muted">Postings are scored against your CV, a description of the job you want, or both.</p>
+      <div class="ctxhost"></div>
+    </div>
+    <div class="card">
+      <h2>CV</h2>
+      <label class="drop" id="drop" for="cv">
+        <input class="vh" type="file" id="cv" accept="application/pdf,.pdf">
+        <b id="droptitle"></b><span class="muted" id="dropsub"></span>
+      </label>
+      <p class="muted">The PDF stays on this computer. Its text is sent to the AI model chosen in Settings, which tidies it up once.</p>
+    </div>
+    <div class="card">
+      <h2><label for="jd">Job description</label></h2>
+      <p class="muted">Describe the job you are looking for: role, seniority, location, must-haves, deal-breakers. Any language works.</p>
+      <textarea id="jd" dir="auto" placeholder="e.g. Senior backend developer, Python or Java, hybrid in Tel Aviv, no agencies…"></textarea>
+      <div class="row"><button id="jdsave" class="primary" type="button" disabled>Save job description</button><span class="muted" id="jdnote"></span></div>
+    </div>
+  </section>
+</main>
+<div id="savebar" hidden><div class="row">
+  <span id="savemsg" role="status"></span>
+  <button id="discard" type="button">Discard</button>
+  <button id="save" type="button" class="primary" disabled>Save settings</button>
+</div></div>
+<div id="toasts" aria-live="polite"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSQX0FslNhTDadL4O5SAGapGt4FodqL8My0mA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
-const el = (tag, text, cls) => { const e = document.createElement(tag); e.textContent = text; if (cls) e.className = cls; return e; };
-let lastQr = null;
-// groups arrive after WhatsApp connects: refresh() re-renders settings when the count changes (-1 = render once at start)
-let groupsSeen = -1;
-
-async function refresh() {
-  try {
-    const s = await (await fetch('/api/status')).json();
-    const st = document.getElementById('status');
-    st.textContent = s.status; st.className = s.status;
-    document.getElementById('groups').textContent = s.groups.length ? `(${s.groups.length} groups)` : '';
-    if (s.groups.length !== groupsSeen && !form.contains(document.activeElement)) { groupsSeen = s.groups.length; loadSettings(); }
-    const qr = document.getElementById('qr');
-    if (s.qr !== lastQr) {
-      lastQr = s.qr; qr.replaceChildren();
-      if (s.qr && window.QRCode) new QRCode(qr, { text: s.qr, width: 256, height: 256 });
-    }
-  } catch (e) { document.getElementById('status').textContent = 'unreachable'; return; }
-  try {
-    const jobs = await (await fetch('/api/jobs')).json();
-    document.getElementById('jobs').replaceChildren(...jobs.map((j) => {
-      const d = el('div', '', 'job');
-      d.append(el('h3', `${j.score == null ? '—' : j.score + '%'} — ${j.company || 'Unknown'}`),
-        el('div', `${j.timestamp} · ${j.group || 'no group'}`, 'meta'),
-        el('p', j.summary), el('p', 'Why: ' + j.reason), el('pre', j.text));
-      if (j.url && /^https?:\/\//.test(j.url)) {
-        const a = el('a', j.url); a.href = j.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; d.append(a);
-      }
-      return d;
-    }));
-  } catch (e) { /* keep last job list */ }
-}
-
-// --- Settings & profile ---
-const TEXT = [['MATCH_THRESHOLD', 'Threshold (0-100)'], ['OUTPUT_LANGUAGE', 'Output language'], ['LLM_MODEL', 'LLM model'], ['LLM_BASE_URL', 'LLM base URL'],
-  ['TELEGRAM_CHAT_ID', 'Telegram chat id'], ['SMTP_HOST', 'SMTP host'], ['SMTP_PORT', 'SMTP port'], ['SMTP_USER', 'SMTP user'], ['EMAIL_FROM', 'Email from'], ['EMAIL_TO', 'Email to'],
-  ['GOOGLE_SERVICE_ACCOUNT_FILE', 'Sheets service-account file'], ['GOOGLE_SHEET_ID', 'Sheet id'], ['GOOGLE_SHEET_TAB', 'Sheet tab']];
-const SECRET = [['LLM_API_KEY', 'LLM API key'], ['TELEGRAM_BOT_TOKEN', 'Telegram bot token'], ['SMTP_PASSWORD', 'SMTP password']];
-const SECRET_SET = Object.fromEntries(SECRET.map(([k]) => [k, 1]));
-const OUTPUTS = ['whatsapp', 'file', 'telegram', 'email', 'sheets'];
-const form = document.getElementById('settings');
-const note = (t) => { document.getElementById('msg').textContent = t; };
-const field = (label, input) => { const l = el('label', label + ' ', 'f'); l.append(input); return l; };
-const input = (name, type, value) => { const i = document.createElement('input'); i.name = name; i.type = type; i.value = value || ''; return i; };
-const picks = (name, items, chosen) => items.map(([v, text]) => {
-  const l = el('label', ' ' + text); const c = input(name, 'checkbox', v); c.checked = chosen.includes(v); l.prepend(c); return l; });
-
-let initial = {};
-async function loadSettings() {
-  const { values, secrets_set } = await (await fetch('/api/settings')).json();
-  initial = values;
-  const groups = (await (await fetch('/api/status')).json()).groups;
-  const list = (v) => (v || '').split(',').filter(Boolean);
-  const gs = groups.map((g) => [g.jid, g.name]);
-  for (const id of list(values.SOURCE_GROUP_IDS)) if (!gs.some(([j]) => j === id)) gs.push([id, id]);
-  const src = el('fieldset'); src.append(el('legend', 'Source groups'), ...picks('SOURCE_GROUP_IDS', gs, list(values.SOURCE_GROUP_IDS)));
-  const target = document.createElement('select'); target.name = 'TARGET_GROUP_ID';
-  for (const [j, n] of [['', '(none)'], ...gs]) { const o = el('option', n); o.value = j; o.selected = j === values.TARGET_GROUP_ID; target.append(o); }
-  const prov = document.createElement('select'); prov.name = 'LLM_PROVIDER';
-  for (const p of ['ollama', 'openai']) { const o = el('option', p); o.value = p; o.selected = p === (values.LLM_PROVIDER || 'ollama'); prov.append(o); }
-  const outs = el('fieldset'); outs.append(el('legend', 'Outputs'), ...picks('OUTPUTS', OUTPUTS.map((o) => [o, o]), list(values.OUTPUTS || 'whatsapp')));
-  const save = el('button', 'Save settings'); save.type = 'submit';
-  form.replaceChildren(src, field('Target group', target), field('LLM provider', prov),
-    ...TEXT.map(([k, l]) => field(l, input(k, 'text', values[k]))),
-    ...SECRET.map(([k, l]) => { const i = input(k, 'password', ''); i.placeholder = secrets_set[k] ? '(set — leave blank to keep)' : '(not set)'; i.autocomplete = 'off'; return field(l, i); }),
-    outs, save, el('span', '', 'meta'));
-  form.lastChild.id = 'msg';
-}
-form.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const all = {};
-  for (const n of ['SOURCE_GROUP_IDS', 'OUTPUTS']) all[n] = [...form.querySelectorAll(`[name=${n}]:checked`)].map((c) => c.value).join(',');
-  for (const [k] of [...TEXT, ...SECRET]) all[k] = form.elements[k].value;
-  all.TARGET_GROUP_ID = form.elements.TARGET_GROUP_ID.value; all.LLM_PROVIDER = form.elements.LLM_PROVIDER.value;
-  // send only what changed, so untouched fields never override .env with blanks
-  const body = Object.fromEntries(Object.entries(all).filter(([k, v]) => v !== (initial[k] ?? '') && !(k in SECRET_SET && !v)));
-  const r = await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  note(r.ok ? 'Saved' : 'Error: ' + (await r.json().catch(() => ({}))).detail);
-  if (r.ok) loadSettings().then(() => note('Saved'));
-});
-
-function showProfile(p) {
-  document.getElementById('profile-mode').textContent = `Profile mode: ${p.mode}${p.has_cv ? ' (CV uploaded)' : ''}`;
-  document.getElementById('jd').value = p.job_description;
-}
-async function profileCall(url, opts, btn) {
-  btn.disabled = true;
-  try {
-    const r = await fetch(url, opts);
-    if (r.ok) showProfile(await r.json()); else alert((await r.json().catch(() => ({}))).detail || 'Upload failed');
-  } finally { btn.disabled = false; }
-}
-document.getElementById('cv-save').onclick = (e) => {
-  const f = document.getElementById('cv').files[0];
-  if (f) profileCall('/api/profile/cv', { method: 'POST', headers: { 'Content-Type': 'application/pdf' }, body: f }, e.target);
+// Rule for this file: server data only ever reaches the DOM through textContent / properties (never innerHTML).
+const $ = (id) => document.getElementById(id);
+const h = (tag, props = {}, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) if (k in e && k !== 'list') e[k] = v; else e.setAttribute(k, v);
+  e.append(...kids.filter((x) => x != null && x !== false));
+  return e;
 };
-document.getElementById('jd-save').onclick = (e) => profileCall('/api/profile/job-description',
-  { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: document.getElementById('jd').value }) }, e.target);
-fetch('/api/profile').then((r) => r.json()).then(showProfile);
-refresh(); setInterval(refresh, 5000);
+const list = (v) => (v || '').split(',').map((x) => x.trim()).filter(Boolean);
+const norm = (v) => list(v).sort().join(',');  // order-insensitive form for comma lists
+const num = (n) => Number(n).toLocaleString();
+async function api(url, opts) {
+  const r = await fetch(url, opts);
+  if (!r.ok) { const e = new Error((await r.json().catch(() => ({}))).detail || `Request failed (${r.status})`); e.status = r.status; throw e; }
+  return r.json();
+}
+function toast(text, kind = 'ok') {
+  const t = h('div', { className: 'toast ' + kind, textContent: text, dir: 'auto' });
+  $('toasts').append(t); setTimeout(() => t.remove(), kind === 'bad' ? 9000 : 4000);
+}
+
+// --- Tabs (hash routing: #settings or #settings:sec-groups) ------------------
+const TABS = ['dashboard', 'settings', 'profile'];
+let tab = 'dashboard';
+function route() {
+  const [t, sec] = location.hash.slice(1).split(':');
+  tab = TABS.includes(t) ? t : 'dashboard';
+  for (const x of TABS) $('tab-' + x).hidden = x !== tab;
+  for (const a of document.querySelectorAll('nav a')) a.getAttribute('href') === '#' + tab ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current');
+  const target = sec && $(sec);
+  if (target) target.scrollIntoView(); else scrollTo(0, 0);
+  updateBar();
+}
+addEventListener('hashchange', route);
+
+// --- Settings state -----------------------------------------------------------
+// base = what the server has (as displayed); draft = only the keys the user changed. Polling never touches draft or inputs.
+const SECRETS = ['LLM_API_KEY', 'TELEGRAM_BOT_TOKEN', 'SMTP_PASSWORD'];
+const OUTPUTS = {
+  whatsapp: ['WhatsApp', 'Forward matches to a WhatsApp group (or your own chat).', ['TARGET_GROUP_ID']],
+  file: ['Local file', 'Append matches to matches.md and matches.jsonl in the data/outputs folder.', []],
+  telegram: ['Telegram', 'Get matches from your own Telegram bot.', ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID']],
+  email: ['Email', 'Send each match by email through your SMTP server.', ['SMTP_HOST', 'EMAIL_FROM', 'EMAIL_TO']],
+  sheets: ['Google Sheets', 'Add each match as a row in a spreadsheet.', ['GOOGLE_SERVICE_ACCOUNT_FILE', 'GOOGLE_SHEET_ID']],
+};
+const LABELS = { SOURCE_GROUP_IDS: 'Source groups', TARGET_GROUP_ID: 'Target group', OUTPUTS: 'Outputs' };
+const form = $('settings');
+let base = null, draft = {}, secretsSet = {}, groups = [], groupSig = '', pickers = [], saving = false;
+const cur = (k) => (k in draft ? draft[k] : base[k] ?? '');
+const dirtyKeys = () => Object.keys(draft);
+function set(k, v) { if (v === (base[k] ?? '')) delete draft[k]; else draft[k] = v; changed(); }
+function setBase(s) {
+  base = { ...s.values }; secretsSet = s.secrets_set || {};
+  // show the effective defaults, and diff against what is shown, so an untouched form sends nothing
+  base.LLM_PROVIDER = (base.LLM_PROVIDER || 'ollama').toLowerCase();
+  base.OUTPUTS = norm((base.OUTPUTS || 'whatsapp').toLowerCase());
+  base.SOURCE_GROUP_IDS = norm(base.SOURCE_GROUP_IDS);
+  for (const k of SECRETS) base[k] = '';
+}
+const isHidden = (k) => !!form.querySelector(`[data-field=${k}]`)?.closest('[hidden]');
+function errors(withHidden) {  // hidden fields (output switched off) must not block Save; save() drops their bad values instead
+  const e = {}, bad = (k, ok, msg) => { if (k in draft && !ok(draft[k]) && (withHidden || !isHidden(k))) e[k] = msg; };
+  bad('MATCH_THRESHOLD', (v) => !v || (/^\d+$/.test(v) && +v <= 100), 'Enter a whole number from 0 to 100.');
+  bad('SMTP_PORT', (v) => !v || /^\d+$/.test(v), 'The port must be a number, for example 587.');
+  bad('LLM_NUM_CTX', (v) => !v || /^[1-9]\d*$/.test(v), 'Enter a whole number of tokens, for example 16384.');
+  bad('OUTPUTS', (v) => !!v, 'Choose at least one output.');
+  return e;
+}
+
+function field(k, label, help, o = {}) {
+  LABELS[k] = label;
+  const id = 'f-' + k, secret = SECRETS.includes(k);
+  const i = o.options
+    ? h('select', { id, 'data-k': k }, ...o.options.map(([value, textContent]) => h('option', { value, textContent })))
+    : h('input', { id, 'data-k': k, type: secret ? 'password' : 'text', autocomplete: secret ? 'new-password' : 'off', spellcheck: false, placeholder: o.placeholder || '', ...(o.numeric && { inputMode: 'numeric' }), ...(o.list && { list: o.list }) });
+  i.setAttribute('aria-describedby', `${id}-h ${id}-e`);
+  return h('div', { className: 'field', 'data-field': k }, h('label', { htmlFor: id, textContent: label }), i,
+    h('p', { className: 'help', id: id + '-h', textContent: help || '' }), h('p', { className: 'err', id: id + '-e', 'data-err': k, role: 'alert' }));
+}
+const card = (id, title, ...kids) => h('fieldset', { className: 'card', id }, h('legend', { textContent: title }), ...kids);
+
+// One picker for both group choices: checkboxes (many) or radios (one). Native inputs keep it keyboard-usable.
+function picker(key, multi, label) {
+  const search = h('input', { type: 'search', placeholder: 'Search groups by name…', 'aria-label': 'Search ' + label });
+  const count = h('span', { className: 'count', role: 'status' });
+  const only = h('input', { type: 'checkbox' });
+  const box = h('div', { className: 'plist' + (multi ? '' : ' single'), role: 'group', 'aria-label': label });
+  let order = [], shown = [];
+  const sel = () => new Set(list(cur(key)));
+  const name = (jid) => order.find((g) => g.jid === jid)?.name || jid;
+  function tally() {
+    const s = sel();
+    count.textContent = multi ? `${s.size} selected` : s.size ? `Sending to: ${name([...s][0])}` : 'No group chosen';
+    count.dir = 'auto';
+  }
+  function render() {
+    const q = search.value.trim().toLowerCase(), s = sel(), top = box.scrollTop;
+    const focused = box.contains(document.activeElement) ? document.activeElement.value : null;
+    shown = order.filter((g) => (!q || g.name.toLowerCase().includes(q) || g.jid.includes(q)) && (!only.checked || s.has(g.jid)));
+    // ponytail: rebuilds every visible row per keystroke; fine for ~1-2k groups, virtualise the list beyond that
+    const rows = shown.map((g) => h('label', {},
+      h('input', { type: multi ? 'checkbox' : 'radio', name: 'pick-' + key, value: g.jid, checked: s.has(g.jid) }),
+      h('span', { textContent: g.name, dir: 'auto' }), g.unknown && h('small', { textContent: 'not in your current groups' })));
+    if (!multi && !q && !only.checked) rows.unshift(h('label', {}, h('input', { type: 'radio', name: 'pick-' + key, value: '', checked: !s.size }), h('span', { textContent: 'None' })));
+    box.replaceChildren(...(rows.length ? rows : [h('p', { className: 'muted', textContent: order.length ? 'No groups match.' : 'Your groups appear here once WhatsApp is connected.' })]));
+    box.scrollTop = top;
+    if (focused != null) [...box.querySelectorAll('input')].find((i) => i.value === focused)?.focus();
+    tally();
+  }
+  function reorder() {  // selected first; only on load / group change / save, so rows never jump while clicking
+    const s = sel(), known = new Set(groups.map((g) => g.jid));
+    order = [...groups.map((g) => ({ jid: g.jid, name: g.name || g.jid })), ...[...s].filter((j) => !known.has(j)).map((jid) => ({ jid, name: jid, unknown: true }))]
+      .sort((a, b) => s.has(b.jid) - s.has(a.jid) || a.name.localeCompare(b.name));
+    render();
+  }
+  search.addEventListener('input', render); only.addEventListener('change', render);
+  search.addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
+  box.addEventListener('change', (e) => {
+    if (!multi) return set(key, e.target.value);
+    const s = sel(); e.target.checked ? s.add(e.target.value) : s.delete(e.target.value);
+    set(key, [...s].sort().join(','));
+  });
+  const bulk = (text, fn) => { const b = h('button', { type: 'button', className: 'link', textContent: text }); b.onclick = () => { set(key, [...fn(sel())].sort().join(',')); render(); }; return b; };
+  const tools = h('div', { className: 'row ptools' }, count, h('label', { className: 'check' }, only, 'Show selected only'),
+    multi && bulk('Select all shown', (s) => new Set([...s, ...shown.map((g) => g.jid)])), multi && bulk('Clear all', () => []));
+  pickers.push({ reorder, tally });
+  return h('div', { style: 'display:grid;gap:.5rem' }, search, tools, box);
+}
+
+function buildForm() {
+  const outs = Object.entries(OUTPUTS).map(([o, [title, help]]) => {
+    const body = h('div', { 'data-for': o, hidden: true });
+    if (o === 'whatsapp') body.append(h('div', { className: 'field', id: 'sec-target' }, h('label', { textContent: 'Send matches to' }), picker('TARGET_GROUP_ID', false, 'target group'),
+      h('p', { className: 'help', textContent: 'Tip: create a WhatsApp group with only yourself in it and pick it here.' })));
+    if (o === 'telegram') body.append(h('div', { className: 'grid2' },
+      field('TELEGRAM_BOT_TOKEN', 'Bot token', 'Create a bot by messaging @BotFather, then paste its token.'),
+      field('TELEGRAM_CHAT_ID', 'Chat id', 'Your Telegram chat id: message @userinfobot. Then send your bot any message once.')));
+    if (o === 'email') body.append(h('div', { className: 'grid2' },
+      field('SMTP_HOST', 'SMTP server', 'For Gmail: smtp.gmail.com', { placeholder: 'smtp.gmail.com' }),
+      field('SMTP_PORT', 'Port', 'Usually 587.', { placeholder: '587', numeric: true }),
+      field('SMTP_USER', 'Username', 'Usually your email address.'),
+      field('SMTP_PASSWORD', 'Password', 'Gmail needs an app password, not your account password.'),
+      field('EMAIL_FROM', 'From address', ''), field('EMAIL_TO', 'Send to', 'Separate several addresses with commas.')));
+    if (o === 'sheets') body.append(h('div', { className: 'grid2' },
+      field('GOOGLE_SERVICE_ACCOUNT_FILE', 'Service-account key file', 'Path to the JSON key, e.g. /data/service-account.json. Share the sheet with that account’s email.'),
+      field('GOOGLE_SHEET_ID', 'Sheet id', 'The long id in the sheet’s URL, between /d/ and /edit.'),
+      field('GOOGLE_SHEET_TAB', 'Tab name', 'Leave empty to use the first tab.')));
+    if (!body.children.length) body.remove();
+    return h('div', { className: 'out' }, h('label', { className: 'check' }, h('input', { type: 'checkbox', 'data-out': o }),
+      h('span', {}, h('b', { textContent: title }), h('span', { className: 'help', textContent: ' — ' + help }))), body.children.length ? body : null);
+  });
+  form.replaceChildren(
+    card('sec-groups', 'Groups to watch', h('p', { className: 'help', textContent: 'Job postings in these WhatsApp groups are read and scored. Nothing is ever posted to them.' }),
+      picker('SOURCE_GROUP_IDS', true, 'source groups')),
+    card('sec-matching', 'Matching', h('div', { className: 'grid2' },
+      field('MATCH_THRESHOLD', 'Minimum score', 'Postings scoring at least this (0–100) count as a match. Default 70.', { placeholder: '70', numeric: true }),
+      field('OUTPUT_LANGUAGE', 'Language of summaries', 'For example English or Hebrew.', { placeholder: 'English' }))),
+    card('sec-llm', 'AI model', h('div', { className: 'ctxhost' }), h('div', { className: 'grid2' },
+      field('LLM_PROVIDER', 'Provider', 'Ollama runs on your computer; nothing leaves it.', { options: [['ollama', 'Ollama (local)'], ['openai', 'OpenAI-compatible API']] }),
+      field('LLM_MODEL', 'Model', 'Pick a suggestion or type any model name.', { list: 'models' }),
+      field('LLM_BASE_URL', 'Server address', 'Leave empty for the default local Ollama.', { placeholder: 'http://host.docker.internal:11434' }),
+      field('LLM_API_KEY', 'API key', 'Only needed for hosted APIs, not for local Ollama.'),
+      'LLM_NUM_CTX' in base && field('LLM_NUM_CTX', 'Context size (tokens)', 'Ollama only: how much text the model reads per posting. Bigger needs more memory.', { placeholder: '16384', numeric: true })),
+      h('datalist', { id: 'models' })),
+    card('sec-outputs', 'Where matches go', h('p', { className: 'err', 'data-err': 'OUTPUTS', role: 'alert' }), ...outs));
+  form.addEventListener('input', (e) => { const k = e.target.dataset.k; if (k) set(k, e.target.value.trim()); });
+  form.addEventListener('change', (e) => {
+    if (e.target.dataset.out) set('OUTPUTS', [...form.querySelectorAll('[data-out]:checked')].map((c) => c.dataset.out).sort().join(','));
+  });
+  form.addEventListener('submit', (e) => e.preventDefault());
+}
+// Push state into the form. Only called on load / save / discard, never by polling. Fields being edited are in draft, so they keep their value.
+function sync() {
+  for (const i of form.querySelectorAll('[data-k]')) {
+    const k = i.dataset.k, v = cur(k);
+    if (i.value !== v && !(k in draft)) i.value = v;
+    if (SECRETS.includes(k)) i.placeholder = secretsSet[k] ? 'Saved (leave blank to keep it)' : 'Not set';
+  }
+  for (const p of pickers) p.reorder();
+  changed();
+}
+// Cheap; runs after every edit.
+function changed() {
+  if (!base) return;
+  const outs = list(cur('OUTPUTS'));
+  for (const c of form.querySelectorAll('[data-out]')) c.checked = outs.includes(c.dataset.out);
+  for (const d of form.querySelectorAll('[data-for]')) d.hidden = !outs.includes(d.dataset.for);
+  const ctxField = form.querySelector('[data-field=LLM_NUM_CTX]'); if (ctxField) ctxField.hidden = cur('LLM_PROVIDER') !== 'ollama';
+  const errs = errors();
+  for (const e of form.querySelectorAll('[data-err]')) {
+    e.textContent = errs[e.dataset.err] || '';
+    form.querySelector(`[data-k=${e.dataset.err}]`)?.setAttribute('aria-invalid', !!errs[e.dataset.err]);
+  }
+  for (const p of pickers) p.tally();
+  updateBar();
+}
+function updateBar() {
+  const keys = base ? dirtyKeys() : [], bad = base ? Object.keys(errors()).length : 0;
+  $('savebar').hidden = !(keys.length || (tab === 'settings' && base));
+  $('savemsg').textContent = saving ? 'Saving… (waits for a running analysis to finish)' : bad ? 'Fix the highlighted fields before saving.'
+    : keys.length ? 'Unsaved changes: ' + keys.map((k) => LABELS[k] || k).join(', ') : 'No unsaved changes';
+  $('save').disabled = saving || bad || !keys.length; $('save').textContent = saving ? 'Saving…' : 'Save settings';
+  $('discard').hidden = !keys.length || saving;
+  document.querySelector('nav a[href="#settings"]').classList.toggle('dirty', keys.length > 0);
+}
+async function loadSettings() {
+  setBase(await api('/api/settings'));
+  if (!form.querySelector('fieldset')) buildForm();
+  sync(); renderSetup(); renderCtx();
+}
+$('save').onclick = async () => {
+  for (const k of Object.keys(errors(true))) delete draft[k];  // invalid values left in fields that are now hidden
+  const sent = { ...draft };  // only the changed keys: unchanged ones must not be frozen into the settings file
+  saving = true; updateBar();
+  try {
+    setBase(await api('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(sent) }));
+    for (const [k, v] of Object.entries(sent)) if (draft[k] === v || draft[k] === base[k]) delete draft[k];  // keep edits made while saving
+    toast('Settings saved');
+    loadAi();
+  } catch (e) { toast(e.status ? 'Not saved: ' + e.message : 'Not saved: could not reach Job Agent.', 'bad'); }
+  saving = false; sync(); renderSetup();
+};
+$('discard').onclick = () => { draft = {}; sync(); };
+addEventListener('beforeunload', (e) => { if (dirtyKeys().length || jdDirty()) { e.preventDefault(); e.returnValue = ''; } });
+
+// --- AI: context-window check + model suggestions (endpoints may not exist yet: 404 hides them) ---
+let ctx = null;
+async function loadAi() {
+  ctx = await api('/api/context').catch(() => null);
+  renderCtx();
+  const m = await api('/api/models').catch(() => null), dl = $('models');
+  if (dl) dl.replaceChildren(...(m?.models || []).map((value) => h('option', { value })));
+}
+function renderCtx() {
+  const c = ctx, problem = c && (c.error || c.status === 'tight' || c.status === 'too_big');
+  for (const host of document.querySelectorAll('.ctxhost')) {
+    if (!c || (host.dataset.compact && !problem)) { host.replaceChildren(); continue; }
+    const kind = c.status === 'too_big' ? 'bad' : problem ? 'warn' : c.status === 'ok' ? 'ok' : '';
+    const title = { ok: 'Your profile fits the model’s context window', tight: 'The model’s context window is tight', too_big: 'The model’s context window is too small' }[c.status] || 'Could not check the model’s context window';
+    const b = c.breakdown || {};
+    host.replaceChildren(h('div', { className: 'ctx ' + kind, role: problem ? 'alert' : 'status' },
+      h('b', { textContent: title }),
+      c.message && h('p', { textContent: c.message, dir: 'auto' }),
+      c.error && c.error !== c.message && h('p', { textContent: c.error, dir: 'auto' }),
+      c.window && h('div', { className: 'meter' }, h('i', { style: `width:${Math.min(100, (c.needed / c.window) * 100)}%` })),
+      h('small', { textContent: [!c.message && `About ${num(c.needed)} tokens needed per posting`,
+        c.model, c.breakdown && `instructions ${num(b.instructions)} · profile ${num(b.profile)} · posting ${num(b.posting)} · reply ${num(b.reply)}`].filter(Boolean).join(' · ') }),
+      host.dataset.compact && h('a', { href: '#settings:sec-llm', textContent: 'Open AI model settings' })));
+  }
+}
+
+// --- Status, QR, setup checklist ------------------------------------------------
+const PILL = { initializing: ['Connecting…', ''], qr: ['Scan QR', 'warn'], ready: ['Connected', 'ok'], disconnected: ['Disconnected', 'bad'], auth_failure: ['Auth failed', 'bad'], unreachable: ['Unreachable', 'bad'] };
+const CONN = {
+  initializing: 'Starting WhatsApp… this can take a minute.',
+  disconnected: 'WhatsApp disconnected. Reconnecting automatically; if a QR code appears here, scan it.',
+  auth_failure: 'WhatsApp rejected the saved login. Restart Job Agent, then scan the new QR code here.',
+  noqr: 'The QR code cannot be drawn because its library did not load. Check your internet connection and reload this page.',
+  unreachable: 'Cannot reach Job Agent. Is it still running? Retrying every few seconds…',
+};
+let status = 'initializing', lastQr = null, fails = 0, profile = null;
+function showStatus(s) {
+  status = s;
+  const [text, cls] = PILL[s] || [s, ''];
+  $('pill').textContent = text; $('pill').className = 'pill ' + cls;
+  const msg = s === 'qr' && !window.QRCode ? CONN.noqr : CONN[s];
+  $('conn').hidden = s === 'ready'; $('qrbox').hidden = s !== 'qr' || !!msg;
+  $('connmsg').textContent = msg || ''; $('connmsg').hidden = !msg;
+  renderSetup();
+}
+function showQr(qr) {
+  if (qr === lastQr) return;
+  lastQr = qr; $('qr').replaceChildren();
+  if (qr && window.QRCode) new QRCode($('qr'), { text: qr, width: 280, height: 280 });
+}
+function renderSetup() {
+  if (!base || !profile) return;
+  const outs = list(base.OUTPUTS), has = (k) => SECRETS.includes(k) ? secretsSet[k] : !!base[k];
+  const missing = outs.filter((o) => !OUTPUTS[o][2].every(has)).map((o) => OUTPUTS[o][0]);
+  const nSrc = list(base.SOURCE_GROUP_IDS).length;
+  const steps = [
+    [status === 'ready', 'Connect WhatsApp', status === 'ready' ? 'Connected' : 'Scan the QR code above with your phone', '#dashboard'],
+    [profile.mode !== 'none', 'Add your profile', profile.mode !== 'none' ? MODES[profile.mode] : 'Upload your CV or describe the job you want', '#profile'],
+    [nSrc > 0, 'Pick groups to watch', nSrc ? `${nSrc} group${nSrc > 1 ? 's' : ''}` : 'Choose the WhatsApp groups where jobs are posted', '#settings:sec-groups'],
+    [!missing.length, 'Choose where matches go', missing.length ? `${missing.join(', ')}: details missing` : outs.map((o) => OUTPUTS[o][0]).join(', '), '#settings:sec-outputs'],
+  ];
+  const left = steps.filter((s) => !s[0]).length;
+  $('setup').hidden = false;
+  $('setup').replaceChildren(
+    h('h2', { textContent: left ? `Finish setting up (${steps.length - left} of ${steps.length} done)` : 'All set' }),
+    left ? h('ol', { className: 'steps' }, ...steps.map(([done, title, sub, href]) => h('li', { className: done ? 'done' : '' },
+      h('a', { href }, h('b', { textContent: done ? '✓' : '', 'aria-hidden': 'true' }), h('span', {}, h('strong', { textContent: title }), h('br'), h('span', { className: 'muted', textContent: (done ? 'Done: ' : '') + sub, dir: 'auto' }))))))
+      : h('p', { className: 'muted', textContent: `Watching ${nSrc} group${nSrc > 1 ? 's' : ''} · matching against ${MODES[profile.mode]} · minimum score ${base.MATCH_THRESHOLD || 70} · sending to ${outs.map((o) => OUTPUTS[o][0]).join(', ')}` }));
+}
+
+// --- Matched jobs -------------------------------------------------------------
+let jobs = [], jobsRaw = '';
+const rel = (iso) => {
+  const s = (Date.now() - new Date(iso)) / 1000;
+  return isNaN(s) ? '' : s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s / 60)}m ago` : s < 86400 ? `${Math.floor(s / 3600)}h ago` : s < 86400 * 30 ? `${Math.floor(s / 86400)}d ago` : new Date(iso).toLocaleDateString();
+};
+const MAX_JOBS = 200;  // ponytail: plain cap instead of paging; search narrows it
+function renderJobs() {
+  const q = $('jq').value.trim().toLowerCase(), min = +$('jmin').value;
+  const hit = jobs.filter((j) => (j.score ?? 0) >= min && (!q || [j.company, j.summary, j.reason, j.group, j.text].some((t) => (t || '').toLowerCase().includes(q))));
+  $('jobcount').textContent = !jobs.length ? '' : hit.length === jobs.length ? `${jobs.length} total` : `${hit.length} of ${jobs.length}`;
+  const cards = hit.slice(0, MAX_JOBS).map((j) => {
+    const sc = j.score == null ? '' : j.score >= 80 ? ' ok' : j.score >= 60 ? ' warn' : '';
+    const when = new Date(j.timestamp);
+    return h('article', { className: 'card job' },
+      h('header', {}, h('span', { className: 'score' + sc, textContent: j.score == null ? '—' : j.score + '%', title: 'Match score' }), h('h3', { textContent: j.company || 'Unknown company', dir: 'auto' })),
+      h('p', { className: 'muted' }, h('time', { dateTime: j.timestamp || '', textContent: rel(j.timestamp), title: isNaN(when) ? '' : when.toLocaleString() }), ' · ', h('bdi', { textContent: j.group || 'no group' })),
+      j.summary && h('p', { textContent: j.summary, dir: 'auto' }),
+      j.reason && h('div', { className: 'why' }, h('span', { className: 'muted', textContent: 'Why it matches' }), h('p', { textContent: j.reason, dir: 'auto' })),
+      /^https?:\/\//i.test(j.url || '') && h('p', {}, h('a', { href: j.url, target: '_blank', rel: 'noopener noreferrer', textContent: 'Open the posting ↗' })),
+      j.text && h('details', {}, h('summary', { textContent: 'Original posting' }), h('pre', { textContent: j.text, dir: 'auto' })));
+  });
+  if (hit.length > MAX_JOBS) cards.push(h('p', { className: 'empty', textContent: `Showing the newest ${MAX_JOBS}. Use the search to find older matches.` }));
+  $('jobs').replaceChildren(...(cards.length ? cards : [h('p', { className: 'card empty', textContent: jobs.length ? 'No matches fit these filters.' : 'No matches yet. Matches appear here as postings arrive.' })]));
+}
+$('jq').oninput = $('jmin').onchange = renderJobs;
+
+// --- Profile ----------------------------------------------------------------------
+const MODES = { both: 'CV + job description', cv: 'CV only', jd: 'job description only', none: 'nothing yet' };
+let jdBase = '', cvBusy = false;
+const jdDirty = () => $('jd').value.trim() !== jdBase.trim();
+function showProfile(p) {
+  if (!jdDirty()) $('jd').value = p.job_description;  // never overwrite text being typed (a CV upload can return a minute later)
+  profile = p; jdBase = p.job_description;
+  $('mode').textContent = MODES[p.mode] + (p.mode === 'none' ? ': add a CV or a job description, otherwise nothing can match' : '');
+  showDrop(); jdState(); renderSetup();
+}
+function showDrop() {
+  $('drop').classList.toggle('busy', cvBusy); $('cv').disabled = cvBusy;
+  $('droptitle').replaceChildren(cvBusy ? h('span', { className: 'spin', role: 'img', 'aria-label': 'Working' }) : profile?.has_cv ? 'CV uploaded ✓' : 'Drop your CV here, or click to choose');
+  $('dropsub').textContent = cvBusy ? 'Processing your CV with the AI… this can take up to a minute. You can keep using the page.' : profile?.has_cv ? 'Drop or choose a new PDF to replace it (max 10 MB)' : 'PDF, max 10 MB';
+}
+function jdState() {
+  $('jdsave').disabled = !jdDirty();
+  $('jdnote').textContent = jdDirty() ? 'Unsaved changes' : jdBase ? 'Saved' : '';
+  document.querySelector('nav a[href="#profile"]').classList.toggle('dirty', jdDirty());
+}
+async function uploadCv(f) {
+  if (!f || cvBusy) return;
+  if (!/\.pdf$/i.test(f.name) && f.type !== 'application/pdf') return toast('Please choose a PDF file.', 'bad');
+  if (f.size > 10 * 1024 * 1024) return toast('That PDF is over 10 MB.', 'bad');
+  cvBusy = true; showDrop();
+  try {
+    const p = await api('/api/profile/cv', { method: 'POST', headers: { 'Content-Type': 'application/pdf' }, body: f });
+    cvBusy = false; showProfile(p); toast('CV processed and saved'); loadAi();
+  } catch (e) { toast('CV not saved: ' + e.message, 'bad'); }
+  cvBusy = false; $('cv').value = ''; showDrop();
+}
+$('cv').onchange = (e) => uploadCv(e.target.files[0]);
+$('drop').ondragover = (e) => { e.preventDefault(); $('drop').classList.add('over'); };
+$('drop').ondragleave = () => $('drop').classList.remove('over');
+$('drop').ondrop = (e) => { e.preventDefault(); $('drop').classList.remove('over'); uploadCv(e.dataTransfer.files[0]); };
+for (const ev of ['dragover', 'drop']) addEventListener(ev, (e) => e.preventDefault());  // a missed drop must not navigate away from the page
+$('jd').oninput = jdState;
+$('jdsave').onclick = async () => {
+  $('jdsave').disabled = true;
+  try {
+    showProfile(await api('/api/profile/job-description', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: $('jd').value }) }));
+    toast(jdBase ? 'Job description saved' : 'Job description removed'); loadAi();
+  } catch (e) { toast('Not saved: ' + e.message, 'bad'); jdState(); }
+};
+
+// --- Polling: updates status, QR, the group lists and jobs. Never form inputs. ---
+async function tick() {
+  try {
+    const s = await api('/api/status');
+    fails = 0; showStatus(s.status); showQr(s.qr);
+    const sig = s.groups.map((g) => g.jid + '\t' + g.name).sort().join('\n');  // order-insensitive: a reshuffled list must not re-sort the pickers
+    if (sig !== groupSig) { groupSig = sig; groups = s.groups; for (const p of pickers) p.reorder(); }
+    if (!base) await loadSettings();
+    if (!profile) showProfile(await api('/api/profile'));
+  } catch (e) { if (++fails >= 2) showStatus('unreachable'); }  // one missed poll is not shown, to avoid flicker
+  try {
+    const r = await fetch('/api/jobs'), raw = await r.text();
+    if (r.ok && raw !== jobsRaw) { jobs = JSON.parse(raw); jobsRaw = raw; renderJobs(); }  // re-render only on new data, so open postings stay open
+  } catch (e) { /* keep the last list */ }
+  for (const t of document.querySelectorAll('time[datetime]')) t.textContent = rel(t.dateTime);
+}
+(async function loop() { await tick(); setTimeout(loop, 5000); })();
+route(); showDrop(); renderJobs(); loadAi();
 </script>
 </body>
 </html>

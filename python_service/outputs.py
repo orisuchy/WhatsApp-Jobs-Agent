@@ -172,9 +172,9 @@ def _older_than_auto_hide(job: dict) -> bool:
     days = (os.environ.get("AUTO_HIDE_DAYS") or "").strip()
     try:
         when = datetime.fromisoformat(job.get("timestamp", ""))
-    except ValueError:
+        return days.isdigit() and int(days) > 0 and (datetime.now(timezone.utc) - when).days >= int(days)
+    except (ValueError, TypeError):  # bad timestamp (missing, naive, non-string) or odd env value: just don't hide
         return False
-    return days.isdigit() and int(days) > 0 and (datetime.now(timezone.utc) - when).days >= int(days)
 
 
 CSV_HEADER = ["date", "score", "company", "summary", "reason", "group", "URL", "status", "starred", "hidden",

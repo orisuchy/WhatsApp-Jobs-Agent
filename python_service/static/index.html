@@ -341,8 +341,15 @@ function picker(key, multi, label) {
     set(key, [...s].sort().join(','));
   });
   const bulk = (text, fn) => { const b = h('button', { type: 'button', className: 'link', textContent: text }); b.onclick = () => { set(key, [...fn(sel())].sort().join(',')); render(); }; return b; };
+  const reload = h('button', { type: 'button', className: 'link', textContent: 'Reload groups', title: 'Get the group list from WhatsApp again (e.g. after joining a group)' });
+  reload.onclick = async () => {
+    reload.disabled = true; reload.textContent = 'Reloading…';
+    try { await api('/api/whatsapp/groups/refresh', { method: 'POST' }); await new Promise((r) => setTimeout(r, 15000)); }  // Node picks it up within ~10 s; the poll shows the new list
+    catch (e) { toast('Could not reload groups: ' + e.message, 'bad'); }
+    reload.disabled = false; reload.textContent = 'Reload groups';
+  };
   const tools = h('div', { className: 'row ptools' }, count, h('label', { className: 'check' }, only, 'Show selected only'),
-    multi && bulk('Select all shown', (s) => new Set([...s, ...shown.map((g) => g.jid)])), multi && bulk('Clear all', () => []));
+    multi && bulk('Select all shown', (s) => new Set([...s, ...shown.map((g) => g.jid)])), multi && bulk('Clear all', () => []), reload);
   pickers.push({ reorder, tally });
   return h('div', { style: 'display:grid;gap:.5rem' }, search, tools, box);
 }

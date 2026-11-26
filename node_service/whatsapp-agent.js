@@ -113,6 +113,10 @@ function pushState(patch) {
           log_error('Could not send reminder: ' + err.message);
         }
       }
+      if (res && res.data && res.data.refresh_groups && stateClient) {
+        // "Reload groups" in the UI. Not awaited: pushGroups queues its own push behind this one.
+        pushGroups(stateClient).catch((err) => log_error('Failed to push groups: ' + err.message));
+      }
       if (res && res.data && res.data.restart) {
         // "Reconnect WhatsApp" in the UI: exit so Docker (restart: unless-stopped) starts a fresh client
         log_info('Restart requested from the web UI; exiting.');
@@ -128,6 +132,7 @@ function pushState(patch) {
 async function pushGroups(client) {
   const chats = await client.getChats();
   const groups = chats.filter((c) => c.isGroup).map((c) => ({ name: c.name, jid: c.id._serialized }));
+  log_info(`Group list loaded: ${groups.length} groups`);
   await pushState({ groups });
 }
 

@@ -346,6 +346,7 @@ def analyze(posting: JobPosting) -> dict:
 # Node pushes its WhatsApp state here; kept in memory only.
 ui_state = {"status": "initializing", "qr": None, "groups": [], "me": None}
 restart_requested = False
+refresh_groups_requested = False
 
 class UiState(BaseModel):
     status: Literal["initializing", "qr", "ready", "disconnected", "auth_failure"] = "initializing"
@@ -356,15 +357,23 @@ class UiState(BaseModel):
 @app.post("/state")
 def push_state(state: UiState) -> dict:
     """Node pushes its state here (at least every 10 s) and picks up a pending restart request."""
-    global restart_requested
+    global restart_requested, refresh_groups_requested
     ui_state.update(state.model_dump())
     restart, restart_requested = restart_requested, False
+    refresh, refresh_groups_requested = refresh_groups_requested and state.status == "ready", refresh_groups_requested and state.status != "ready"
     messages = []
     if state.status == "ready":  # only a connected client can send; otherwise they wait for the next push
         with reminders_lock:
             messages = [{"to": to, "text": text} for to, text in pending_whatsapp]
             pending_whatsapp.clear()
-    return {"ok": True, "restart": restart, "messages": messages}
+    return {"ok": True, "restart": restart, "messages": messages, "refresh_groups": refresh}
+
+@app.post("/api/whatsapp/groups/refresh")
+def refresh_groups() -> dict:
+    """Ask Node to re-read the group list on its next state push (within ~10 s)."""
+    global refresh_groups_requested
+    refresh_groups_requested = True
+    return {"ok": True}
 
 @app.post("/api/whatsapp/restart")
 def whatsapp_restart() -> dict:

@@ -299,3 +299,19 @@ test('pushState sends reminder messages from Python and survives a failing send'
   await pushState({ status: 'ready' });
   assert.deepEqual(sent, [{ to: 'b@g.us', text: 'hi' }]);
 });
+
+test('a refresh_groups reply re-reads the chats and pushes the new group list', async (t) => {
+  const { pushState, registerStateEvents } = require('./whatsapp-agent');
+  const bodies = [];
+  let first = true;
+  t.mock.method(axios, 'post', async (url, body) => {
+    bodies.push(body);
+    const data = { ok: true, refresh_groups: first }; first = false;
+    return { data };
+  });
+  const client = { on: () => {}, getChats: async () => [{ isGroup: true, name: 'New group', id: { _serialized: 'g1@g.us' } }, { isGroup: false, name: 'Dana', id: { _serialized: 'd@c.us' } }] };
+  registerStateEvents(client);
+  await pushState({});
+  await new Promise((r) => setTimeout(r, 20));
+  assert.deepEqual(bodies.at(-1).groups, [{ name: 'New group', jid: 'g1@g.us' }]);
+});

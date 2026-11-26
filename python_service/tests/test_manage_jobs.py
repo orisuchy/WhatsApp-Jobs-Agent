@@ -124,3 +124,11 @@ def test_recent_jobs_not_auto_hidden(monkeypatch, tmp_path):
     monkeypatch.setenv("AUTO_HIDE_DAYS", "30")
     with TestClient(main.app) as c:
         assert not any(j.get("hidden") for j in c.get("/api/jobs").json())
+
+
+def test_reload_groups_is_handed_to_node_once_and_only_when_ready():
+    with TestClient(main.app) as c:
+        assert c.post("/api/whatsapp/groups/refresh").status_code == 200
+        assert c.post("/state", json={"status": "qr"}).json()["refresh_groups"] is False  # kept until connected
+        assert c.post("/state", json={"status": "ready"}).json()["refresh_groups"] is True
+        assert c.post("/state", json={"status": "ready"}).json()["refresh_groups"] is False

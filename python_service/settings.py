@@ -4,6 +4,7 @@ Overrides are applied onto os.environ so every module that reads env sees them w
 """
 import json
 import os
+import re
 
 from logger import setup_logger
 
@@ -14,7 +15,7 @@ KEYS = (
     "LLM_PROVIDER", "LLM_MODEL", "LLM_BASE_URL", "LLM_API_KEY", "LLM_NUM_CTX",
     "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
     "SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "EMAIL_FROM", "EMAIL_TO",
-    "GOOGLE_SERVICE_ACCOUNT_FILE", "GOOGLE_SHEET_ID", "GOOGLE_SHEET_TAB",
+    "GOOGLE_SERVICE_ACCOUNT_FILE", "GOOGLE_SHEET_ID", "GOOGLE_SHEET_TAB", "GOOGLE_SHEETS",
     "SCORE_WEIGHT_ROLE", "SCORE_WEIGHT_SKILLS", "SCORE_WEIGHT_DOMAIN", "SCORE_WEIGHT_FIT", "HARD_REJECTS", "SCORING_NOTES",
     "HOME_LOCATION", "MAX_DISTANCE_KM", "AUTO_HIDE_DAYS",
 )
@@ -108,6 +109,8 @@ def validate(patch: dict) -> dict[str, str]:
             raise ValueError("MAX_DISTANCE_KM must be a positive number of kilometres")
     if out.get("AUTO_HIDE_DAYS") and not (out["AUTO_HIDE_DAYS"].isdigit() and int(out["AUTO_HIDE_DAYS"]) > 0):
         raise ValueError("AUTO_HIDE_DAYS must be a whole number of days (1 or more)")
+    if out.get("GOOGLE_SHEETS"):
+        out["GOOGLE_SHEETS"] = _sheets(out["GOOGLE_SHEETS"])
     if "SMTP_PORT" in out and out["SMTP_PORT"] and not out["SMTP_PORT"].isdigit():
         raise ValueError("SMTP_PORT must be a number")
     return out
@@ -133,3 +136,23 @@ def public() -> dict:
     """Effective settings for the UI: secrets are reported only as set/unset."""
     values = {k: os.environ.get(k, "") for k in KEYS if k not in SECRETS}
     return {"values": values, "secrets_set": {k: bool(os.environ.get(k)) for k in SECRETS}}
+
+
+MAX_SHEETS = 20
+
+def sheet_id(v: str) -> str:
+    """The id from a pasted sheet link (…/d/<id>/edit…), or the value itself."""
+    m = re.search(r"/d/([A-Za-z0-9_-]+)", v)
+    return m.group(1) if m else v.strip()
+
+def _sheets(raw: str) -> str:
+    """GOOGLE_SHEETS: JSON list of {"id", "tab"}; links become ids, empty rows are dropped."""
+    try:
+        items = json.loads(raw)
+        rows = [{"id": sheet_id(str(i.get("id") or "")), "tab": str(i.get("tab") or "").strip()} for i in items]
+    except (ValueError, TypeError, AttributeError):
+        raise ValueError("GOOGLE_SHEETS must be a list of sheets")
+    rows = [r for r in rows if r["id"]]
+    if len(rows) > MAX_SHEETS:
+        raise ValueError(f"At most {MAX_SHEETS} sheets")
+    return json.dumps(rows, ensure_ascii=False, separators=(",", ":")) if rows else ""

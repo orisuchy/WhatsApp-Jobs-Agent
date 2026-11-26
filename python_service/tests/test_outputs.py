@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 import main
 import outputs
+import settings
 
 TOKEN = "123456:SECRET-TOKEN"
 GOOD = {"odds": 80, "reason": "good fit", "company": "Acme", "summary": "Python dev"}
@@ -247,8 +248,9 @@ def sheets_env(monkeypatch, tmp_path):
     key.write_text("{}")
     monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_FILE", str(key))
     monkeypatch.setenv("GOOGLE_SHEET_ID", "sheet-1")
+    monkeypatch.delenv("GOOGLE_SHEETS", raising=False)
     ws = FakeWorksheet()
-    monkeypatch.setattr(outputs, "_open_worksheet", lambda: ws)
+    monkeypatch.setattr(outputs, "_open_worksheet", lambda *a: ws)
     return ws
 
 
@@ -278,7 +280,7 @@ def test_sheets_missing_config_or_key_file_is_skipped(monkeypatch, sheets_env, c
     assert sheets_env.rows == []
 
     monkeypatch.delenv("GOOGLE_SHEET_ID")
-    assert "GOOGLE_SHEET_ID" in outputs.missing_config("sheets")
+    assert "GOOGLE_SHEETS (no sheet)" in outputs.missing_config("sheets")
 
 
 def test_sheets_selects_tab_and_uses_service_account(monkeypatch, tmp_path):
@@ -292,16 +294,12 @@ def test_sheets_selects_tab_and_uses_service_account(monkeypatch, tmp_path):
     service_account.return_value.open_by_key.return_value = book
     monkeypatch.setitem(sys.modules, "gspread", types.SimpleNamespace(service_account=service_account))
     monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_FILE", "/data/sa.json")
-    monkeypatch.setenv("GOOGLE_SHEET_ID", "sheet-9")
-    monkeypatch.setenv("GOOGLE_SHEET_TAB", "Matches")
-
-    assert outputs._open_worksheet() is ws
+    assert outputs._open_worksheet("sheet-9", "Matches") is ws
     service_account.assert_called_once_with(filename="/data/sa.json")
     service_account.return_value.open_by_key.assert_called_once_with("sheet-9")
     book.worksheet.assert_called_once_with("Matches")
 
-    monkeypatch.delenv("GOOGLE_SHEET_TAB")
-    assert outputs._open_worksheet() is book.sheet1
+    assert outputs._open_worksheet("sheet-9") is book.sheet1
 
 
 def test_key_file_strips_quotes_and_falls_back_to_data_dir(tmp_path, monkeypatch):
@@ -314,3 +312,32 @@ def test_key_file_strips_quotes_and_falls_back_to_data_dir(tmp_path, monkeypatch
     assert outputs.missing_config("sheets") == []
     monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_FILE", "/elsewhere/other.json")
     assert outputs.missing_config("sheets")
+
+
+def test_several_sheets_each_get_the_row_and_one_failing_does_not_stop_the_others(monkeypatch, tmp_path):
+    key = tmp_path / "sa.json"
+    key.write_text("{}")
+    monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_FILE", str(key))
+    monkeypatch.setenv("GOOGLE_SHEETS", settings.validate({"GOOGLE_SHEETS": json.dumps([
+        {"id": "https://docs.google.com/spreadsheets/d/AAA_1-x/edit#gid=0", "tab": " all "},
+        {"id": "BROKEN", "tab": ""}, {"id": "  ", "tab": "x"}, {"id": "CCC", "tab": ""}])})["GOOGLE_SHEETS"])
+    assert outputs.sheet_targets() == [{"id": "AAA_1-x", "tab": "all"}, {"id": "BROKEN", "tab": ""}, {"id": "CCC", "tab": ""}]
+    books = {"AAA_1-x": FakeWorksheet(), "CCC": FakeWorksheet()}
+
+    def open_ws(sheet_id, tab=""):
+        if sheet_id == "BROKEN":
+            raise RuntimeError("not shared")
+        return books[sheet_id]
+    monkeypatch.setattr(outputs, "_open_worksheet", open_ws)
+    outputs.sheets_output(_job())
+    assert all(len(ws.rows) == 2 for ws in books.values())
+
+
+def test_sheets_list_falls_back_to_the_single_env_sheet_and_rejects_garbage(monkeypatch):
+    monkeypatch.delenv("GOOGLE_SHEETS", raising=False)
+    monkeypatch.setenv("GOOGLE_SHEET_ID", "S1")
+    monkeypatch.setenv("GOOGLE_SHEET_TAB", "T")
+    assert outputs.sheet_targets() == [{"id": "S1", "tab": "T"}]
+    with pytest.raises(ValueError):
+        settings.validate({"GOOGLE_SHEETS": "not json"})
+    assert settings.validate({"GOOGLE_SHEETS": "[]"})["GOOGLE_SHEETS"] == ""

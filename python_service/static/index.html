@@ -250,9 +250,9 @@ const OUTPUTS = {
   file: ['Local file', 'Append matches to matches.md and matches.jsonl in the data/outputs folder.', []],
   telegram: ['Telegram', 'Get matches from your own Telegram bot.', ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID']],
   email: ['Email', 'Send each match by email through your SMTP server.', ['SMTP_HOST', 'EMAIL_FROM', 'EMAIL_TO']],
-  sheets: ['Google Sheets', 'Add each match as a row in a spreadsheet.', ['GOOGLE_SERVICE_ACCOUNT_FILE', 'GOOGLE_SHEET_ID']],
+  sheets: ['Google Sheets', 'Add each match as a row in a spreadsheet.', ['GOOGLE_SERVICE_ACCOUNT_FILE', 'GOOGLE_SHEETS']],
 };
-const LABELS = { SOURCE_GROUP_IDS: 'Source groups', TARGET_GROUP_ID: 'Target group', OUTPUTS: 'Outputs', HARD_REJECTS: 'Automatic rejects' };
+const LABELS = { GOOGLE_SHEETS: 'Google Sheets', SOURCE_GROUP_IDS: 'Source groups', TARGET_GROUP_ID: 'Target group', OUTPUTS: 'Outputs', HARD_REJECTS: 'Automatic rejects' };
 const WEIGHTS = [['SCORE_WEIGHT_ROLE', 'Role & seniority', 30], ['SCORE_WEIGHT_SKILLS', 'Hard skills', 30], ['SCORE_WEIGHT_DOMAIN', 'Domain experience', 30], ['SCORE_WEIGHT_FIT', 'Overall fit', 10]];
 const REJECTS = { mandatory: 'It requires something your profile clearly lacks', role_family: 'It is a different kind of role (e.g. chef vs developer)', seniority: 'The seniority gap is 2+ levels (e.g. junior vs lead)' };
 const form = $('settings');
@@ -268,7 +268,10 @@ function setBase(s) {
   base.SOURCE_GROUP_IDS = norm(base.SOURCE_GROUP_IDS);
   base.HARD_REJECTS = (base.HARD_REJECTS || '').toLowerCase() === 'none' ? 'none' : norm(base.HARD_REJECTS || Object.keys(REJECTS).join(','));
   for (const k of SECRETS) base[k] = '';
+  // a single sheet from .env (or older settings) shows as the first row of the list
+  if (!base.GOOGLE_SHEETS && base.GOOGLE_SHEET_ID) base.GOOGLE_SHEETS = JSON.stringify([{ id: sheetId(base.GOOGLE_SHEET_ID), tab: (base.GOOGLE_SHEET_TAB || '').trim() }]);
 }
+const sheetId = (v) => (v.match(/\/d\/([\w-]+)/) || [, v.trim()])[1];  // a pasted link → its id
 const isHidden = (k) => !!form.querySelector(`[data-field=${k}]`)?.closest('[hidden]');
 function errors(withHidden) {  // hidden fields (output switched off) must not block Save; save() drops their bad values instead
   const e = {}, bad = (k, ok, msg) => { if (k in draft && !ok(draft[k]) && (withHidden || !isHidden(k))) e[k] = msg; };
@@ -364,17 +367,40 @@ function showKey(email) {
   $('keytitle').textContent = email ? 'Key uploaded ✓ (click to replace)' : 'Upload key file';
   $('keyinfo').replaceChildren(...(email ? ['Share your sheet (Share button in Google Sheets) with ', h('code', { textContent: email, dir: 'ltr' }), ' as Editor.'] : ['No key uploaded yet.']));
 }
-function sheetTest() {
-  const res = h('span', { role: 'status', dir: 'auto' }), btn = h('button', { type: 'button', textContent: 'Test connection' });
-  btn.onclick = async () => {
-    btn.disabled = true; res.className = 'muted'; res.textContent = 'Testing…';
-    try {
-      const r = await api('/api/sheets/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sheet_id: cur('GOOGLE_SHEET_ID'), tab: cur('GOOGLE_SHEET_TAB') }) });
-      res.className = ''; res.textContent = `✓ Connected to tab “${r.tab}”.` + (dirtyKeys().some((k) => k.startsWith('GOOGLE_')) ? ' Now save settings.' : '');
-    } catch (e) { res.className = 'err'; res.textContent = e.message; }
-    btn.disabled = false;
-  };
-  return h('div', { className: 'row' }, btn, res);
+// Every match is added to each sheet in the list. Sheets owned by other Google accounts work too, once shared with the key's email.
+function sheetList() {
+  let items = [];
+  const box = h('div', { style: 'display:grid;gap:.8rem' });
+  const load = () => { try { items = JSON.parse(cur('GOOGLE_SHEETS') || '[]'); } catch { items = []; } if (!items.length) items.push({ id: '', tab: '' }); };
+  const put = () => set('GOOGLE_SHEETS', (() => { const l = items.map((r) => ({ id: sheetId(r.id), tab: r.tab.trim() })).filter((r) => r.id); return l.length ? JSON.stringify(l) : ''; })());
+  function row(r, n) {
+    const id = h('input', { type: 'text', value: r.id, spellcheck: false, placeholder: 'https://docs.google.com/spreadsheets/d/…', 'aria-label': `Sheet ${n + 1} link or id` });
+    const tab = h('input', { type: 'text', value: r.tab, spellcheck: false, placeholder: 'First tab', 'aria-label': `Sheet ${n + 1} tab name` });
+    id.oninput = () => { r.id = id.value; put(); }; tab.oninput = () => { r.tab = tab.value; put(); };
+    const res = h('span', { role: 'status', dir: 'auto' }), test = h('button', { type: 'button', textContent: 'Test' });
+    test.onclick = async () => {
+      test.disabled = true; res.className = 'muted'; res.textContent = 'Testing…';
+      try {
+        const t = await api('/api/sheets/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sheet_id: r.id, tab: r.tab }) });
+        res.className = ''; res.textContent = `✓ Connected to tab “${t.tab}”.` + ('GOOGLE_SHEETS' in draft ? ' Now save settings.' : '');
+      } catch (e) { res.className = 'err'; res.textContent = e.message; }
+      test.disabled = false;
+    };
+    const del = h('button', { type: 'button', className: 'link', textContent: 'Remove' });
+    del.onclick = () => { items.splice(n, 1); put(); load2(); };
+    return h('div', { className: 'card', style: 'display:grid;gap:.5rem;padding:.8rem' },
+      h('div', { className: 'grid2' }, h('label', { className: 'field' }, h('span', { textContent: `Sheet ${n + 1}: link or id` }), id),
+        h('label', { className: 'field' }, h('span', { textContent: 'Tab name' }), tab)),
+      h('div', { className: 'row' }, test, items.length > 1 && del, res));
+  }
+  function render() { box.replaceChildren(...items.map(row)); }
+  const load2 = () => { if (!items.length) items.push({ id: '', tab: '' }); render(); };
+  const add = h('button', { type: 'button', textContent: '+ Add another sheet' });
+  add.onclick = () => { items.push({ id: '', tab: '' }); render(); box.lastChild.querySelector('input').focus(); };
+  pickers.push({ reorder: () => { load(); render(); }, tally() {} });  // re-read on load / save / discard, never while typing
+  return h('div', { className: 'field' }, h('b', { textContent: 'Sheets' }),
+    h('p', { className: 'help', textContent: 'Each match is added as a row to every sheet here. Paste the sheet’s link from the browser. Leave the tab name empty to use the first tab. A sheet in another Google account works too: share it with the email above.' }),
+    box, h('div', { className: 'row' }, add));
 }
 
 function buildForm() {
@@ -391,9 +417,7 @@ function buildForm() {
       field('SMTP_USER', 'Username', 'Usually your email address.'),
       field('SMTP_PASSWORD', 'Password', 'Gmail needs an app password, not your account password.'),
       field('EMAIL_FROM', 'From address', ''), field('EMAIL_TO', 'Send to', 'Separate several addresses with commas.')));
-    if (o === 'sheets') body.append(sheetKey(), h('div', { className: 'grid2' },
-      field('GOOGLE_SHEET_ID', 'Sheet id', 'The long id in the sheet’s URL, between /d/ and /edit.'),
-      field('GOOGLE_SHEET_TAB', 'Tab name', 'Leave empty to use the first tab.')), sheetTest());
+    if (o === 'sheets') body.append(sheetKey(), sheetList());
     if (!body.children.length) body.remove();
     return h('div', { className: 'out' }, h('label', { className: 'check' }, h('input', { type: 'checkbox', 'data-out': o }),
       h('span', {}, h('b', { textContent: title }), h('span', { className: 'help', textContent: ' — ' + help }))), body.children.length ? body : null);

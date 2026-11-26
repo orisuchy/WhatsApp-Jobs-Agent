@@ -14,6 +14,7 @@ from threading import Lock
 import requests
 
 from logger import setup_logger
+import settings
 
 logger = setup_logger("job-agent.outputs")
 
@@ -26,7 +27,7 @@ NETWORK_TIMEOUT_S = 15
 REQUIRED_ENV = {
     "telegram": ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"),
     "email": ("SMTP_HOST", "EMAIL_FROM", "EMAIL_TO"),
-    "sheets": ("GOOGLE_SERVICE_ACCOUNT_FILE", "GOOGLE_SHEET_ID"),
+    "sheets": ("GOOGLE_SERVICE_ACCOUNT_FILE",),
 }
 SHEET_HEADER = ["date", "score", "company", "summary", "reason", "group", "URL", "original text"]
 
@@ -68,6 +69,8 @@ def missing_config(name: str) -> list[str]:
     key = key_file()
     if name == "sheets" and key and not os.path.isfile(key):
         missing.append(f"GOOGLE_SERVICE_ACCOUNT_FILE (no such file: {key}; put the key in the data folder)")
+    if name == "sheets" and not sheet_targets():
+        missing.append("GOOGLE_SHEETS (no sheet)")
     return missing
 
 def enabled_outputs() -> list[str]:
@@ -350,11 +353,22 @@ def _email_send(subject: str, text: str) -> None:
             smtp.login(user, os.environ.get("SMTP_PASSWORD", ""))
         smtp.send_message(msg)
 
-def _open_worksheet(sheet_id: str | None = None, tab: str | None = None):
+def sheet_targets() -> list[dict]:
+    """GOOGLE_SHEETS (list set in the UI), else the single GOOGLE_SHEET_ID/GOOGLE_SHEET_TAB from .env."""
+    raw = os.environ.get("GOOGLE_SHEETS")
+    try:
+        items = json.loads(raw) if raw else [{"id": os.environ.get("GOOGLE_SHEET_ID"), "tab": os.environ.get("GOOGLE_SHEET_TAB")}]
+        rows = [{"id": settings.sheet_id(str(i.get("id") or "")), "tab": str(i.get("tab") or "").strip()} for i in items]
+    except (ValueError, TypeError, AttributeError):
+        logger.error("GOOGLE_SHEETS is not a list of sheets; ignored")
+        return []
+    return [r for r in rows if r["id"]]
+
+
+def _open_worksheet(sheet_id: str, tab: str = ""):
     import gspread  # lazy: only needed when `sheets` is enabled
 
-    sheet = gspread.service_account(filename=key_file()).open_by_key(sheet_id or os.environ["GOOGLE_SHEET_ID"])
-    tab = os.environ.get("GOOGLE_SHEET_TAB") if tab is None else tab
+    sheet = gspread.service_account(filename=key_file()).open_by_key(sheet_id)
     return sheet.worksheet(tab) if tab else sheet.sheet1
 
 
@@ -387,7 +401,7 @@ def test_sheet(sheet_id: str, tab: str) -> str:
     if not sheet_id:
         raise ValueError("Enter the sheet id.")
     try:
-        return _open_worksheet(sheet_id, tab).title
+        return _open_worksheet(settings.sheet_id(sheet_id), tab).title
     except gspread.exceptions.SpreadsheetNotFound:
         raise ValueError(f"Sheet not found. Check the sheet id, and share the sheet with {email} as Editor.")
     except gspread.exceptions.WorksheetNotFound:
@@ -404,11 +418,16 @@ def test_sheet(sheet_id: str, tab: str) -> str:
 
 
 def sheets_output(job: dict) -> None:
-    ws = _open_worksheet()
-    if not ws.row_values(1):
-        ws.append_row(SHEET_HEADER, value_input_option="RAW")
+    """One row per sheet; a failing sheet is logged and never stops the others."""
     row = [job["timestamp"], job["score"], job["company"], job["summary"], job["reason"], job["group"], job["url"] or "", job["text"]]
-    ws.append_row(row, value_input_option="RAW")  # RAW: posting text starting with "=" must not become a formula
+    for t in sheet_targets():
+        try:
+            ws = _open_worksheet(t["id"], t["tab"])
+            if not ws.row_values(1):
+                ws.append_row(SHEET_HEADER, value_input_option="RAW")
+            ws.append_row(row, value_input_option="RAW")  # RAW: posting text starting with "=" must not become a formula
+        except Exception:
+            logger.exception("Google Sheet %s (tab %r) failed", t["id"], t["tab"] or "first")
 
 
 DESTINATIONS = {"file": file_output, "telegram": telegram_output, "email": email_output, "sheets": sheets_output}

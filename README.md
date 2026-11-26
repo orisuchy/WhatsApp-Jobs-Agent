@@ -328,10 +328,12 @@ This one has the most steps.
 3. In Job Agent, tick **Google Sheets**, click **Upload key file** and choose that file.
    The page then shows an email address ending in `.iam.gserviceaccount.com`.
 4. Open your Google Sheet, click **Share**, and share it with that email address as **Editor**.
-5. Back in Job Agent, fill in the sheet id (the long code in the sheet's address, between `/d/`
-   and `/edit`) and, if you want, the tab name. Click **Test connection**: it tells you what to
-   fix if something is wrong.
+5. Back in Job Agent, paste the sheet's link (copy it from the browser's address bar) and, if you
+   want, a tab name. Click **Test**: it tells you what to fix if something is wrong.
 6. Click **Save settings**.
+
+**More than one sheet:** click **+ Add another sheet**. Every match is added to all of them. A sheet
+that belongs to another Google account works too: share it with the same email address (step 4).
 
 A header row is added if the sheet is empty, then one row per match.
 </details>

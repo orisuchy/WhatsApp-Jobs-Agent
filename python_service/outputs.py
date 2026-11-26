@@ -220,6 +220,37 @@ def update_job(data_dir: str, job_id: str, changes: dict) -> bool:
     return True
 
 
+def due_reminders(data_dir: str) -> list[dict]:
+    """Jobs whose reminder time has come."""
+    now = datetime.now(timezone.utc)
+    due = []
+    for job in read_matches(data_dir):
+        try:
+            if job.get("remind_at") and datetime.fromisoformat(job["remind_at"]) <= now:
+                due.append(job)
+        except (ValueError, TypeError):
+            pass  # unparseable or naive time: never fires
+    return due
+
+def reminder_text(job: dict) -> str:
+    lines = [f"⏰ Reminder: {job.get('company') or 'Unknown'} ({job.get('score')}%)", job.get("summary") or ""]
+    if job.get("note"):
+        lines.append(f"Your note: {job['note']}")
+    if job.get("url"):
+        lines.append(job["url"])
+    return "\n".join(line for line in lines if line)
+
+def send_reminder(text: str) -> None:
+    """To the enabled Telegram/email destinations; one failing never blocks the other. WhatsApp is sent via Node."""
+    for name in enabled_outputs():
+        try:
+            if name == "telegram":
+                _telegram_send(text)
+            elif name == "email":
+                _email_send("Job Agent reminder", text)
+        except Exception:
+            logger.exception("Reminder to %r failed", name)
+
 def remove_job(data_dir: str, job_id: str, allow_again: bool) -> bool:
     """Delete a job from the store. allow_again also forgets its dedup key, so a repost is analysed and
     can match again; otherwise reposts stay ignored. False if no such job."""
@@ -266,8 +297,10 @@ def file_output(job: dict) -> None:
 
 
 def telegram_output(job: dict) -> None:
+    _telegram_send(format_whatsapp(job, _language(), bold=""))  # no parse_mode: posting text may hold * or _
+
+def _telegram_send(text: str) -> None:
     token, chat_id = os.environ["TELEGRAM_BOT_TOKEN"], os.environ["TELEGRAM_CHAT_ID"]
-    text = format_whatsapp(job, _language(), bold="")  # no parse_mode: posting text may hold * or _
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     # ponytail: hard cut at the limit; split on newlines if long messages read badly
     for i in range(0, len(text), TELEGRAM_MAX_CHARS):
@@ -279,11 +312,14 @@ def telegram_output(job: dict) -> None:
             raise RuntimeError(f"Telegram sendMessage failed ({status})") from None
 
 def email_output(job: dict) -> None:
+    _email_send(f"New job match {job['score']}%: {job['company']}", format_whatsapp(job, _language(), bold=""))
+
+def _email_send(subject: str, text: str) -> None:
     msg = EmailMessage()
-    msg["Subject"] = f"New job match {job['score']}%: {job['company']}"
+    msg["Subject"] = subject
     msg["From"] = os.environ["EMAIL_FROM"]
     msg["To"] = os.environ["EMAIL_TO"]
-    msg.set_content(format_whatsapp(job, _language(), bold=""))
+    msg.set_content(text)
     port = int(os.environ.get("SMTP_PORT") or 587)
     with smtplib.SMTP(os.environ["SMTP_HOST"], port, timeout=NETWORK_TIMEOUT_S) as smtp:
         if _smtp_starttls_on():

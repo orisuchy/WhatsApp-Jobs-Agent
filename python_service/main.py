@@ -4,6 +4,8 @@ import os
 import re
 import ipaddress
 import socket
+import time
+from datetime import datetime
 from contextlib import asynccontextmanager
 from threading import Lock, Thread
 from urllib.parse import urljoin, urlparse
@@ -321,6 +323,7 @@ async def lifespan(app):
     load_profile()
     outputs.warn_missing_config()
     Thread(target=log_context_warning, daemon=True).start()  # network call: don't hold up startup
+    start_reminders()
     yield
 
 
@@ -356,7 +359,12 @@ def push_state(state: UiState) -> dict:
     global restart_requested
     ui_state.update(state.model_dump())
     restart, restart_requested = restart_requested, False
-    return {"ok": True, "restart": restart}
+    messages = []
+    if state.status == "ready":  # only a connected client can send; otherwise they wait for the next push
+        with reminders_lock:
+            messages = [{"to": to, "text": text} for to, text in pending_whatsapp]
+            pending_whatsapp.clear()
+    return {"ok": True, "restart": restart, "messages": messages}
 
 @app.post("/api/whatsapp/restart")
 def whatsapp_restart() -> dict:
@@ -396,6 +404,14 @@ class JobUpdate(BaseModel):
     hidden: bool | None = None
     starred: bool | None = None
     status: Literal["", "interested", "applied", "interview", "offer", "rejected"] | None = None
+    remind_at: str | None = Field(None, description="ISO date-time with timezone; '' clears it")
+
+    @field_validator("remind_at")
+    @classmethod
+    def _iso(cls, v):
+        if v and datetime.fromisoformat(v).tzinfo is None:  # ValueError from a bad string also becomes a 422
+            raise ValueError("remind_at needs a timezone")
+        return v
 
 
 @app.get("/api/jobs.csv")
@@ -429,6 +445,40 @@ def not_for_me(body: NotForMe) -> dict:
             raise HTTPException(422, str(e))
         reload_settings()
     return {"ok": True}
+
+
+# --- Reminders: checked every minute; Telegram/email sent directly, WhatsApp via Node's next state push
+REMINDER_CHECK_S = 60
+reminders_lock = Lock()
+pending_whatsapp: list[tuple[str, str]] = []
+_reminders_started = False
+
+
+def check_reminders() -> None:
+    for job in outputs.due_reminders(DATA_DIR):
+        outputs.update_job(DATA_DIR, job["id"], {"remind_at": ""})  # cleared first: at most once, never re-sent
+        text = outputs.reminder_text(job)
+        outputs.send_reminder(text)
+        target = os.environ.get("TARGET_GROUP_ID")
+        if "whatsapp" in outputs.enabled_outputs() and target:
+            with reminders_lock:
+                pending_whatsapp.append((target, text))
+
+
+def _reminder_loop() -> None:
+    while True:
+        try:
+            check_reminders()
+        except Exception:
+            logger.exception("Reminder check failed")
+        time.sleep(REMINDER_CHECK_S)
+
+
+def start_reminders() -> None:
+    global _reminders_started
+    if not _reminders_started:
+        _reminders_started = True
+        Thread(target=_reminder_loop, daemon=True).start()
 
 
 @app.delete("/api/jobs/{job_id}")

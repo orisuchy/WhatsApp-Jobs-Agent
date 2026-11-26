@@ -139,6 +139,10 @@ you. Matches also appear on the **Dashboard**, newest first.
   so similar postings score lower from now on.
 - **Star a job:** click the ☆ on its card. Starred jobs stay at the top of the list.
 - **Track your application:** pick *Interested*, *Applied*, *Interview*, *Offer* or *Rejected* on a card, and use the status filter above the list to see only those.
+- **Get a reminder:** on a card, pick a date and time under **Remind me**. When it comes, Job Agent
+  messages you once on WhatsApp (your target chat) and on Telegram or email if you turned those on.
+  Click **Clear reminder** to cancel. The computer must be on (and WhatsApp connected) at that time;
+  if it isn't, the reminder arrives as soon as it is.
 - **Export your list:** click **Export CSV** next to the job count to download all your matches, with your notes, statuses and stars, as a file you can open in Excel or Google Sheets.
 - **Stop Job Agent:** in the Terminal, inside the `job-agent` folder, run `docker compose stop`.
   Or simply quit Docker Desktop.

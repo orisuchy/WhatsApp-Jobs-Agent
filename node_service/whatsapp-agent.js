@@ -95,6 +95,7 @@ let exitProcess = (code) => process.exit(code);  // swapped in tests
 
 // Push our state to Python for the web UI; never let a UI failure affect the agent.
 let pushQueue = Promise.resolve();
+let stateClient = null; // set by registerStateEvents; sends the reminders Python hands back
 function pushState(patch) {
   Object.assign(uiState, patch);
   const snapshot = { ...uiState };
@@ -102,6 +103,13 @@ function pushState(patch) {
   pushQueue = pushQueue.then(async () => {
     try {
       const res = await axios.post(STATE_URL, snapshot, { timeout: 5000 });
+      for (const m of (res && res.data && res.data.messages) || []) {
+        try {
+          await stateClient.sendMessage(m.to, m.text);
+        } catch (err) {
+          log_error('Could not send reminder: ' + err.message);
+        }
+      }
       if (res && res.data && res.data.restart) {
         // "Reconnect WhatsApp" in the UI: exit so Docker (restart: unless-stopped) starts a fresh client
         log_info('Restart requested from the web UI; exiting.');
@@ -122,6 +130,7 @@ async function pushGroups(client) {
 
 // Mirrors client lifecycle events into the UI state.
 function registerStateEvents(client) {
+  stateClient = client;
   client.on('qr', (qr) => pushState({ status: 'qr', qr }));
   client.on('ready', () => {
     pushState({ status: 'ready', qr: null, me: client.info?.wid?._serialized || null });

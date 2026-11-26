@@ -577,6 +577,11 @@ function renderJobs() {
       /^https?:\/\//i.test(j.url || '') && h('p', {}, h('a', { href: j.url, target: '_blank', rel: 'noopener noreferrer', textContent: 'Open the posting ↗' })),
       j.text && h('details', {}, h('summary', { textContent: 'Original posting' }), h('pre', { textContent: j.text, dir: 'auto' })),
       noteBox(j),
+      j.remind_at && !isNaN(new Date(j.remind_at))
+        ? h('p', { className: 'row' }, h('span', { textContent: '⏰ ' + new Date(j.remind_at).toLocaleString() }),
+            h('button', { type: 'button', textContent: 'Clear reminder', onclick: () => patchJob(j, { remind_at: '' }, 'Reminder cleared.') }))
+        : h('label', { className: 'field' }, h('span', { className: 'muted', textContent: 'Remind me' }),
+            h('input', { type: 'datetime-local', onchange: (e) => e.target.value && patchJob(j, { remind_at: new Date(e.target.value).toISOString() }, 'Reminder set.') })),
       h('div', { className: 'row actions' },
         h('select', { 'aria-label': 'Application status', onchange: (e) => patchJob(j, { status: e.target.value }, 'Status saved.') },
           ...STATUSES.map(([v, l]) => h('option', { value: v, textContent: l, selected: (j.status || '') === v }))),
@@ -606,7 +611,7 @@ async function patchJob(j, change, msg) {
     await api('/api/jobs/' + j.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(change) });
     for (const x of jobs) if (x.id === j.id) Object.assign(x, change);  // by id: a poll may have swapped in fresh objects meanwhile
     if (msg) toast(msg);
-    if ('hidden' in change || 'starred' in change || 'status' in change) renderJobs();
+    if ('hidden' in change || 'starred' in change || 'status' in change || 'remind_at' in change) renderJobs();
   } catch (e) { toast('Could not save: ' + e.message, 'bad'); }
 }
 let rmJob = null, rmAct = '';

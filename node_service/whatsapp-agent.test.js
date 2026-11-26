@@ -264,3 +264,17 @@ test('ready pushes the user\'s own chat id', async (t) => {
   await new Promise((r) => setTimeout(r, 10));
   assert.equal(bodies[0].me, '972500000000@c.us');
 });
+
+test('pushState sends reminder messages from Python and survives a failing send', async (t) => {
+  const { pushState, registerStateEvents } = require('./whatsapp-agent');
+  const sent = [];
+  registerStateEvents({
+    on() {},
+    sendMessage: async (to, text) => { if (text === 'bad') throw new Error('nope'); sent.push({ to, text }); },
+  });
+  t.mock.method(axios, 'post', async () => ({
+    data: { ok: true, messages: [{ to: 'a@g.us', text: 'bad' }, { to: 'b@g.us', text: 'hi' }] },
+  }));
+  await pushState({ status: 'ready' });
+  assert.deepEqual(sent, [{ to: 'b@g.us', text: 'hi' }]);
+});

@@ -36,9 +36,10 @@ only the jobs that fit, with a score and a one-line reason.
 - **Docker Desktop** (free): it runs Job Agent in a sealed box so you don't have to install
   anything else by hand. Download it from <https://www.docker.com/products/docker-desktop/>.
 - **An AI model**, one of:
-  - **Ollama** (free, runs on your computer, private). Best with 16 GB of memory or more.
+  - **Ollama** (free, runs on your computer, private). Needs a computer with at least 16 GB of
+    memory, see [Which model for my computer?](#which-model-for-my-computer).
     Download it from <https://ollama.com>.
-  - **A paid AI service** such as OpenAI or Gemini, if your computer is older or slow.
+  - **A paid AI service** such as OpenAI or Gemini, for computers with less memory.
     See [Choosing the AI](#choosing-the-ai).
 - **Your CV as a PDF**, or a few sentences describing the job you're looking for.
 
@@ -65,9 +66,9 @@ Install Ollama and open it. Then, in the Terminal, run:
 ollama pull gemma4:e2b
 ```
 
-This downloads the AI model (a few GB, so it can take a while). `gemma4:e2b` is small and works
-on most computers. If your computer has 16 GB of memory or more, `gemma4:12b` gives noticeably
-better results: run `ollama pull gemma4:12b` instead and choose it later in the settings.
+This downloads the AI model (about 5 GB, so it can take a while). If your computer has 24 GB of
+memory or more, use the better `gemma4:12b` instead (`ollama pull gemma4:12b`) and choose it
+later in the settings. See [Which model for my computer?](#which-model-for-my-computer).
 
 ### 3. Download Job Agent
 
@@ -193,10 +194,30 @@ The distance is a straight line on the map, not driving time, so leave some marg
 |---|---|---|
 | **Cost** | Free | Pay per use; usually cheap with a small model (check the provider's prices) |
 | **Privacy** | Nothing leaves your computer | Postings and your CV are sent to that company |
-| **Needs** | A reasonably strong computer (16 GB+ memory recommended) | An account and an API key |
+| **Needs** | 16 GB of memory or more (see below) | An account and an API key |
 | **Speed** | Depends on your computer | Fast |
 
 Only messages that look like job postings are sent to the AI, so normal chatter costs nothing.
+
+### Which model for my computer?
+
+First check how much memory (RAM) your computer has: on a Mac, Apple menu → **About This Mac**
+(the "Memory" line); on Windows, **Settings → System → About** ("Installed RAM").
+
+| Your computer's memory | Use |
+|---|---|
+| Less than 16 GB | A paid AI service: a local model would leave too little memory for everything else |
+| 16 GB | `gemma4:e2b` (the default) |
+| 24 GB or more | `gemma4:12b`: noticeably better matching |
+
+Why: Job Agent itself (Docker and the hidden browser that runs WhatsApp) plus your system and
+browser use about 6 GB. `gemma4:e2b` needs about 5–6 GB more while it works, `gemma4:12b`
+about 8–9 GB.
+
+Speed: on Apple Silicon Macs (M1 and newer) and PCs with a recent graphics card, a posting takes
+seconds. On other computers it works, but each posting can take a minute or more.
+
+If your computer gets slow or a model keeps timing out, switch to the smaller model or a paid service.
 
 **To use a paid service:** create an API key on the provider's website, then in
 **Settings → AI model** set **Provider** to *OpenAI-compatible API*, and fill in **Server

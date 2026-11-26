@@ -1,0 +1,27 @@
+README.md
+  s_f0b3d055912f99::t_7d8015d0a2d086 197,202-220
+  s_f0b3d055912f99::t_0e631a8070faad 39-40,42
+  s_f0b3d055912f99::t_26184762b2b378 69-71
+  s_f0b3d055912f99::t_879ddd3db37eb9 221
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b9382332b06575b5a023d68378cc7e37b5c55ed5",
+  "prompts": {},
+  "humans": {
+    "h_0890608decf2a3": {
+      "author": "Ori Suchy <orisuchy@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_f0b3d055912f99": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0ae6c7fd-7e45-4536-ba8e-74fd39250ca1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Ori Suchy <orisuchy@gmail.com>"
+    }
+  }
+}

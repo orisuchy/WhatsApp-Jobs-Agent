@@ -217,6 +217,7 @@ Everything stays on your machine except what you send out:
 
 - **No QR code / can't link:** watch `docker compose logs -f node-whatsapp`, or open the web UI.
   If the session is stale, `docker compose down -v` removes the `whatsapp_session` volume (you re-scan).
+- **WhatsApp disconnected / auth failed:** the WhatsApp container restarts itself after a disconnect, and the web UI has a **Reconnect WhatsApp** button. Both rely on Docker's `restart: unless-stopped`; without Docker, restart `node whatsapp-agent.js` yourself.
 - **Chromium "profile in use" / SingletonLock error:** the container deletes stale locks on start, so
   `docker compose restart node-whatsapp` is usually enough; if it persists, remove the `whatsapp_session` volume.
 - **"Failed to initialize client: Cannot read properties of null (reading 'Socket')" (or similar):** a

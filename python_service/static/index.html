@@ -131,6 +131,7 @@
     <div class="ctxhost" data-compact="1"></div>
     <div class="card" id="conn" hidden>
       <p id="connmsg"></p>
+      <p><button id="reconnect" type="button" class="primary" hidden>Reconnect WhatsApp</button></p>
       <div id="qrbox" hidden>
         <h2>Scan to connect WhatsApp</h2>
         <div id="qr" role="img" aria-label="WhatsApp QR code"></div>
@@ -166,6 +167,7 @@
         <input class="vh" type="file" id="cv" accept="application/pdf,.pdf">
         <b id="droptitle"></b><span class="muted" id="dropsub"></span>
       </label>
+      <div class="row"><button id="cvdel" type="button" class="link" hidden>Remove CV</button></div>
       <p class="muted">The PDF stays on this computer. Its text is sent to the AI model chosen in Settings, which tidies it up once.</p>
     </div>
     <div class="card">
@@ -231,7 +233,7 @@ const OUTPUTS = {
 };
 const LABELS = { SOURCE_GROUP_IDS: 'Source groups', TARGET_GROUP_ID: 'Target group', OUTPUTS: 'Outputs' };
 const form = $('settings');
-let base = null, draft = {}, secretsSet = {}, groups = [], groupSig = '', pickers = [], saving = false;
+let base = null, draft = {}, secretsSet = {}, groups = [], groupSig = '', pickers = [], saving = false, me = null;
 const cur = (k) => (k in draft ? draft[k] : base[k] ?? '');
 const dirtyKeys = () => Object.keys(draft);
 function set(k, v) { if (v === (base[k] ?? '')) delete draft[k]; else draft[k] = v; changed(); }
@@ -294,9 +296,10 @@ function picker(key, multi, label) {
     tally();
   }
   function reorder() {  // selected first; only on load / group change / save, so rows never jump while clicking
-    const s = sel(), known = new Set(groups.map((g) => g.jid));
-    order = [...groups.map((g) => ({ jid: g.jid, name: g.name || g.jid })), ...[...s].filter((j) => !known.has(j)).map((jid) => ({ jid, name: jid, unknown: true }))]
-      .sort((a, b) => s.has(b.jid) - s.has(a.jid) || a.name.localeCompare(b.name));
+    const s = sel(), self = !multi && me ? [{ jid: me, name: 'Me (Message yourself)' }] : [];  // target only: the user's own chat, always first
+    const known = new Set([...groups, ...self].map((g) => g.jid));
+    order = [...self, ...[...groups.map((g) => ({ jid: g.jid, name: g.name || g.jid })), ...[...s].filter((j) => !known.has(j)).map((jid) => ({ jid, name: jid, unknown: true }))]
+      .sort((a, b) => s.has(b.jid) - s.has(a.jid) || a.name.localeCompare(b.name))];
     render();
   }
   search.addEventListener('input', render); only.addEventListener('change', render);
@@ -317,7 +320,7 @@ function buildForm() {
   const outs = Object.entries(OUTPUTS).map(([o, [title, help]]) => {
     const body = h('div', { 'data-for': o, hidden: true });
     if (o === 'whatsapp') body.append(h('div', { className: 'field', id: 'sec-target' }, h('label', { textContent: 'Send matches to' }), picker('TARGET_GROUP_ID', false, 'target group'),
-      h('p', { className: 'help', textContent: 'Tip: create a WhatsApp group with only yourself in it and pick it here.' })));
+      h('p', { className: 'help', textContent: 'Tip: pick "Me (Message yourself)" to get matches in your own chat, or a group with only you in it.' })));
     if (o === 'telegram') body.append(h('div', { className: 'grid2' },
       field('TELEGRAM_BOT_TOKEN', 'Bot token', 'Create a bot by messaging @BotFather, then paste its token.'),
       field('TELEGRAM_CHAT_ID', 'Chat id', 'Your Telegram chat id: message @userinfobot. Then send your bot any message once.')));
@@ -440,7 +443,7 @@ const PILL = { initializing: ['Connecting…', ''], qr: ['Scan QR', 'warn'], rea
 const CONN = {
   initializing: 'Starting WhatsApp… this can take a minute.',
   disconnected: 'WhatsApp disconnected. Reconnecting automatically; if a QR code appears here, scan it.',
-  auth_failure: 'WhatsApp rejected the saved login. Restart Job Agent, then scan the new QR code here.',
+  auth_failure: 'WhatsApp rejected the saved login. Click Reconnect, then scan the new QR code here.',
   noqr: 'The QR code cannot be drawn because its library did not load. Check your internet connection and reload this page.',
   unreachable: 'Cannot reach Job Agent. Is it still running? Retrying every few seconds…',
 };
@@ -452,6 +455,7 @@ function showStatus(s) {
   const msg = s === 'qr' && !window.QRCode ? CONN.noqr : CONN[s];
   $('conn').hidden = s === 'ready'; $('qrbox').hidden = s !== 'qr' || !!msg;
   $('connmsg').textContent = msg || ''; $('connmsg').hidden = !msg;
+  $('reconnect').hidden = !['disconnected', 'auth_failure'].includes(s);
   renderSetup();
 }
 function showQr(qr) {
@@ -478,6 +482,13 @@ function renderSetup() {
       h('a', { href }, h('b', { textContent: done ? '✓' : '', 'aria-hidden': 'true' }), h('span', {}, h('strong', { textContent: title }), h('br'), h('span', { className: 'muted', textContent: (done ? 'Done: ' : '') + sub, dir: 'auto' }))))))
       : h('p', { className: 'muted', textContent: `Watching ${nSrc} group${nSrc > 1 ? 's' : ''} · matching against ${MODES[profile.mode]} · minimum score ${base.MATCH_THRESHOLD || 70} · sending to ${outs.map((o) => OUTPUTS[o][0]).join(', ')}` }));
 }
+
+$('reconnect').onclick = async () => {
+  $('reconnect').disabled = true;
+  try { await api('/api/whatsapp/restart', { method: 'POST' }); toast('Reconnecting… a new QR code or "Connected" appears within a minute.'); showStatus('initializing'); }
+  catch (e) { toast('Could not reconnect: ' + e.message, 'bad'); }
+  $('reconnect').disabled = false;
+};
 
 // --- Matched jobs -------------------------------------------------------------
 let jobs = [], jobsRaw = '';
@@ -518,6 +529,7 @@ function showProfile(p) {
 }
 function showDrop() {
   $('drop').classList.toggle('busy', cvBusy); $('cv').disabled = cvBusy;
+  $('cvdel').hidden = cvBusy || !profile?.has_cv;
   $('droptitle').replaceChildren(cvBusy ? h('span', { className: 'spin', role: 'img', 'aria-label': 'Working' }) : profile?.has_cv ? 'CV uploaded ✓' : 'Drop your CV here, or click to choose');
   $('dropsub').textContent = cvBusy ? 'Processing your CV with the AI… this can take up to a minute. You can keep using the page.' : profile?.has_cv ? 'Drop or choose a new PDF to replace it (max 10 MB)' : 'PDF, max 10 MB';
 }
@@ -538,6 +550,11 @@ async function uploadCv(f) {
   cvBusy = false; $('cv').value = ''; showDrop();
 }
 $('cv').onchange = (e) => uploadCv(e.target.files[0]);
+$('cvdel').onclick = async () => {
+  if (!confirm('Remove your CV? Postings will then be matched only against your job description (if any).')) return;
+  try { showProfile(await api('/api/profile/cv', { method: 'DELETE' })); toast('CV removed'); loadAi(); }
+  catch (e) { toast('CV not removed: ' + e.message, 'bad'); }
+};
 $('drop').ondragover = (e) => { e.preventDefault(); $('drop').classList.add('over'); };
 $('drop').ondragleave = () => $('drop').classList.remove('over');
 $('drop').ondrop = (e) => { e.preventDefault(); $('drop').classList.remove('over'); uploadCv(e.dataTransfer.files[0]); };
@@ -556,8 +573,8 @@ async function tick() {
   try {
     const s = await api('/api/status');
     fails = 0; showStatus(s.status); showQr(s.qr);
-    const sig = s.groups.map((g) => g.jid + '\t' + g.name).sort().join('\n');  // order-insensitive: a reshuffled list must not re-sort the pickers
-    if (sig !== groupSig) { groupSig = sig; groups = s.groups; for (const p of pickers) p.reorder(); }
+    const sig = (s.me || '') + '\n' + s.groups.map((g) => g.jid + '\t' + g.name).sort().join('\n');  // order-insensitive: a reshuffled list must not re-sort the pickers
+    if (sig !== groupSig) { groupSig = sig; groups = s.groups; me = s.me; for (const p of pickers) p.reorder(); }
     if (!base) await loadSettings();
     if (!profile) showProfile(await api('/api/profile'));
   } catch (e) { if (++fails >= 2) showStatus('unreachable'); }  // one missed poll is not shown, to avoid flicker

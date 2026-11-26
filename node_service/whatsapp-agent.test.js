@@ -165,7 +165,7 @@ test('pushes qr then ready state (with groups) to Python', async (t) => {
   client.emit('ready');
   await new Promise((r) => setTimeout(r, 20));
 
-  assert.deepEqual(bodies[0], { status: 'qr', qr: 'QR-STRING', groups: [] });
+  assert.deepEqual(bodies[0], { status: 'qr', qr: 'QR-STRING', groups: [], me: null });
   assert.equal(bodies[1].status, 'ready');
   assert.equal(bodies[1].qr, null);
   assert.deepEqual(bodies.at(-1).groups, [{ name: 'G1', jid: 'g1@g.us' }]);
@@ -241,4 +241,26 @@ test('clientOptions pins WhatsApp Web only when WWEBJS_WEB_VERSION is set', () =
   assert.equal(o.webVersion, '2.3000.1');
   assert.equal(o.webVersionCache.type, 'remote');
   assert.match(o.webVersionCache.remotePath, /wa-version\/main\/html\/2\.3000\.1\.html$/);
+});
+
+test('a restart request in the state-push reply exits the process', async (t) => {
+  const agent = require('./whatsapp-agent');
+  const exits = [];
+  agent.setExit((code) => exits.push(code));
+  t.after(() => agent.setExit((code) => process.exit(code)));
+  t.mock.method(axios, 'post', async () => ({ data: { ok: true, restart: true } }));
+  await agent.pushState({});
+  assert.deepEqual(exits, [0]);
+});
+
+test('ready pushes the user\'s own chat id', async (t) => {
+  const { registerStateEvents } = require('./whatsapp-agent');
+  const bodies = [];
+  t.mock.method(axios, 'post', async (url, body) => { bodies.push(body); return { data: {} }; });
+  const handlers = {};
+  const client = { on: (ev, fn) => { handlers[ev] = fn; }, info: { wid: { _serialized: '972500000000@c.us' } }, getChats: async () => [] };
+  registerStateEvents(client);
+  handlers.ready();
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(bodies[0].me, '972500000000@c.us');
 });

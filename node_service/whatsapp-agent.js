@@ -90,7 +90,8 @@ async function getConfig() {
   return configCache.value;
 }
 
-const uiState = { status: 'initializing', qr: null, groups: [] };
+const uiState = { status: 'initializing', qr: null, groups: [], me: null };
+let exitProcess = (code) => process.exit(code);  // swapped in tests
 
 // Push our state to Python for the web UI; never let a UI failure affect the agent.
 let pushQueue = Promise.resolve();
@@ -100,7 +101,12 @@ function pushState(patch) {
   // Serialised so a slow earlier push can't land after (and overwrite) a newer one.
   pushQueue = pushQueue.then(async () => {
     try {
-      await axios.post(STATE_URL, snapshot, { timeout: 5000 });
+      const res = await axios.post(STATE_URL, snapshot, { timeout: 5000 });
+      if (res && res.data && res.data.restart) {
+        // "Reconnect WhatsApp" in the UI: exit so Docker (restart: unless-stopped) starts a fresh client
+        log_info('Restart requested from the web UI; exiting.');
+        exitProcess(0);
+      }
     } catch (err) {
       log_error('Could not push state to Python: ' + err.message);
     }
@@ -118,7 +124,7 @@ async function pushGroups(client) {
 function registerStateEvents(client) {
   client.on('qr', (qr) => pushState({ status: 'qr', qr }));
   client.on('ready', () => {
-    pushState({ status: 'ready', qr: null });
+    pushState({ status: 'ready', qr: null, me: client.info?.wid?._serialized || null });
     pushGroups(client).catch((err) => log_error('Failed to push groups: ' + err.message));
   });
   client.on('auth_failure', () => pushState({ status: 'auth_failure', qr: null }));
@@ -207,7 +213,7 @@ function start() {
   const client = createClient();
   registerStateEvents(client);
   pushState({ status: 'initializing', qr: null }); // clears stale UI state after a Node restart
-  setInterval(() => pushState({}), 30000); // re-sync the UI state after a Python restart
+  setInterval(() => pushState({}), 10000); // re-sync the UI after a Python restart; also picks up restart requests
 
   client.on('qr', (qr) => {
     log_info('QR code received, scan to authenticate');
@@ -258,6 +264,7 @@ module.exports = {
   pushState,
   registerStateEvents,
   clientOptions,
+  setExit: (fn) => { exitProcess = fn; },
 };
 
 if (require.main === module) {

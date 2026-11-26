@@ -13,7 +13,7 @@ from typing import Literal
 
 from fastapi.concurrency import run_in_threadpool
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field, field_validator
 from pypdf import PdfReader
 import requests
@@ -330,16 +330,29 @@ def analyze(posting: JobPosting) -> dict:
 
 # --- Web UI -----------------------------------------------------------------
 # Node pushes its WhatsApp state here; kept in memory only.
-ui_state = {"status": "initializing", "qr": None, "groups": []}
+ui_state = {"status": "initializing", "qr": None, "groups": [], "me": None}
+restart_requested = False
 
 class UiState(BaseModel):
     status: Literal["initializing", "qr", "ready", "disconnected", "auth_failure"] = "initializing"
     qr: str | None = None
     groups: list[dict] = []
+    me: str | None = None  # the user's own chat id, so matches can go to "message yourself"
 
 @app.post("/state")
 def push_state(state: UiState) -> dict:
+    """Node pushes its state here (at least every 10 s) and picks up a pending restart request."""
+    global restart_requested
     ui_state.update(state.model_dump())
+    restart, restart_requested = restart_requested, False
+    return {"ok": True, "restart": restart}
+
+@app.post("/api/whatsapp/restart")
+def whatsapp_restart() -> dict:
+    """Ask Node to exit on its next state push; Docker (restart: unless-stopped) starts a fresh client."""
+    global restart_requested
+    restart_requested = True
+    ui_state.update(status="initializing", qr=None)
     return {"ok": True}
 
 @app.get("/api/status")
@@ -347,8 +360,17 @@ def api_status() -> dict:
     return ui_state
 
 @app.get("/api/jobs")
-def api_jobs() -> list:
-    return outputs.read_matches(DATA_DIR)
+def api_jobs(request: Request):
+    """Matched jobs; ETag from the file's mtime/size so the UI's 5 s poll is a cheap 304 when nothing changed."""
+    try:
+        st = os.stat(os.path.join(DATA_DIR, "matches.jsonl"))
+        etag = f'"{st.st_mtime_ns}-{st.st_size}"'
+    except FileNotFoundError:
+        etag = '"empty"'
+    headers = {"ETag": etag, "Cache-Control": "no-cache"}
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=headers)
+    return JSONResponse(outputs.read_matches(DATA_DIR), headers=headers)
 
 # --- Context-window check ----------------------------------------------------
 CHARS_PER_TOKEN = 3  # ponytail: rough and on the safe side (Hebrew tokenises denser than English); use a real tokenizer if this misleads
@@ -473,6 +495,16 @@ def _save_cv(data: bytes) -> dict:
         raise HTTPException(422, "That file is not a readable PDF")
     os.replace(tmp, final)
     with llm_lock:  # cleaning the CV calls the LLM
+        load_profile()
+    return profile_info()
+
+@app.delete("/api/profile/cv")
+def delete_cv() -> dict:
+    for name in ("cv.pdf", "cv_clean_text.txt", "cv_clean_text.txt.sha256"):
+        path = os.path.join(profile_dir(), name)
+        if os.path.exists(path):
+            os.remove(path)
+    with llm_lock:
         load_profile()
     return profile_info()
 

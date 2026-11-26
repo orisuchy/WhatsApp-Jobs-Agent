@@ -254,7 +254,7 @@ def test_ui_state_push_and_read():
     with TestClient(main.app) as c:
         state = {"status": "qr", "qr": "QR", "groups": [{"name": "G", "jid": "g@g.us"}]}
         assert c.post("/state", json=state).status_code == 200
-        assert c.get("/api/status").json() == state
+        assert c.get("/api/status").json() == {**state, "me": None}
 
 
 def test_api_jobs_newest_first_and_page_served(monkeypatch, tmp_path):
@@ -391,3 +391,35 @@ def test_num_ctx_setting_validated(monkeypatch):
     with TestClient(main.app) as c:
         assert c.put("/api/settings", json={"LLM_NUM_CTX": "abc"}).status_code == 422
         assert c.put("/api/settings", json={"LLM_NUM_CTX": "32768"}).json()["values"]["LLM_NUM_CTX"] == "32768"
+
+
+def test_delete_cv_removes_pdf_and_cache(monkeypatch):
+    with TestClient(main.app) as c:
+        d = main.profile_dir()
+        os.makedirs(d, exist_ok=True)
+        for name in ("cv.pdf", "cv_clean_text.txt", "cv_clean_text.txt.sha256"):
+            open(os.path.join(d, name), "w").close()
+        r = c.delete("/api/profile/cv").json()
+    assert r["has_cv"] is False and r["mode"] == "none"
+    assert os.listdir(d) == []
+
+
+def test_restart_request_is_handed_to_node_once():
+    with TestClient(main.app) as c:
+        assert c.post("/state", json={"status": "ready"}).json()["restart"] is False
+        c.post("/api/whatsapp/restart")
+        assert c.get("/api/status").json()["status"] == "initializing"
+        assert c.post("/state", json={"status": "ready", "me": "972500000000@c.us"}).json()["restart"] is True
+        assert c.post("/state", json={"status": "ready"}).json()["restart"] is False
+        assert c.get("/api/status").json()["me"] is None  # each push is the full state
+
+
+def test_jobs_etag_returns_304_when_unchanged():
+    with TestClient(main.app) as c:
+        r = c.get("/api/jobs")
+        assert r.status_code == 200 and r.json() == []
+        assert c.get("/api/jobs", headers={"If-None-Match": r.headers["etag"]}).status_code == 304
+        with open(os.path.join(main.DATA_DIR, "matches.jsonl"), "w") as f:
+            f.write('{"company": "Acme"}\n')
+        r2 = c.get("/api/jobs", headers={"If-None-Match": r.headers["etag"]})
+        assert r2.status_code == 200 and r2.json()[0]["company"] == "Acme"

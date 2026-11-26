@@ -380,6 +380,7 @@ def api_jobs(request: Request):
             parts.append(f"{st.st_mtime_ns}-{st.st_size}")
         except FileNotFoundError:
             parts.append("none")
+    parts.append(os.environ.get("AUTO_HIDE_DAYS") or "off")  # the setting changes what is hidden
     etag = f'"{"-".join(parts)}"'
     headers = {"ETag": etag, "Cache-Control": "no-cache"}
     if request.headers.get("if-none-match") == etag:

@@ -161,8 +161,20 @@ def read_matches(data_dir: str) -> list[dict]:
             logger.warning("Skipping corrupt line in matches.jsonl")
             continue
         key = job_key(job.get("text", ""))
-        jobs.append({**job, "id": key, **state.get(key, {})})
+        job = {**job, "id": key, **state.get(key, {})}
+        if "hidden" not in job and not job.get("starred") and not job.get("status") and _older_than_auto_hide(job):
+            job.update(hidden=True, auto_hidden=True)  # computed, not stored: changing the setting re-shows them
+        jobs.append(job)
     return jobs
+
+
+def _older_than_auto_hide(job: dict) -> bool:
+    days = (os.environ.get("AUTO_HIDE_DAYS") or "").strip()
+    try:
+        when = datetime.fromisoformat(job.get("timestamp", ""))
+    except ValueError:
+        return False
+    return days.isdigit() and int(days) > 0 and (datetime.now(timezone.utc) - when).days >= int(days)
 
 
 CSV_HEADER = ["date", "score", "company", "summary", "reason", "group", "URL", "status", "starred", "hidden",

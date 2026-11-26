@@ -277,6 +277,7 @@ function errors(withHidden) {  // hidden fields (output switched off) must not b
   bad('LLM_NUM_CTX', (v) => !v || /^[1-9]\d*$/.test(v), 'Enter a whole number of tokens, for example 16384.');
   bad('OUTPUTS', (v) => !!v, 'Choose at least one output.');
   for (const [k] of WEIGHTS) bad(k, (v) => !v || (/^\d+$/.test(v) && +v <= 100), 'Enter a whole number from 0 to 100.');
+  bad('AUTO_HIDE_DAYS', (v) => !v || /^[1-9]\d*$/.test(v), 'Enter a whole number of days, for example 30, or leave empty.');
   bad('MAX_DISTANCE_KM', (v) => !v || (/^\d+(\.\d+)?$/.test(v) && +v > 0), 'Enter a distance in km, for example 30.');
   return e;
 }
@@ -370,7 +371,8 @@ function buildForm() {
       picker('SOURCE_GROUP_IDS', true, 'source groups')),
     card('sec-matching', 'Matching', h('div', { className: 'grid2' },
       field('MATCH_THRESHOLD', 'Minimum score', 'Postings scoring at least this (0–100) count as a match. Default 70.', { placeholder: '70', numeric: true }),
-      field('OUTPUT_LANGUAGE', 'Language of summaries', 'For example English or Hebrew.', { placeholder: 'English' }))),
+      field('OUTPUT_LANGUAGE', 'Language of summaries', 'For example English or Hebrew.', { placeholder: 'English' }),
+      field('AUTO_HIDE_DAYS', 'Auto-hide after (days)', 'Jobs older than this move to Hidden, unless starred or given a status. Leave empty to never hide.', { placeholder: 'e.g. 30', numeric: true }))),
     card('sec-scoring', 'Scoring preferences',
       h('p', { className: 'help', textContent: 'How much each part of the match counts. Relative weights: they are scaled to add up to 100%. Set one to 0 to ignore it.' }),
       h('div', { className: 'grid2' }, ...WEIGHTS.map(([k, label, d]) => field(k, label, '', { placeholder: String(d), numeric: true }))),
@@ -569,6 +571,7 @@ function renderJobs() {
       h('p', { className: 'muted' }, h('time', { dateTime: j.timestamp || '', textContent: rel(j.timestamp), title: isNaN(when) ? '' : when.toLocaleString() }), ' · ', h('bdi', { textContent: j.group || 'no group' })),
       (() => { const w = [j.location && j.location !== 'Unknown' && j.location, j.work_mode && j.work_mode !== 'unknown' && j.work_mode, j.distance_km != null && `${j.distance_km} km from home`].filter(Boolean);
         return w.length ? h('p', { className: 'muted', dir: 'auto', textContent: '📍 ' + w.join(' · ') }) : null; })(),
+      j.auto_hidden && h('p', { className: 'muted', textContent: `Hidden automatically (older than ${base.AUTO_HIDE_DAYS} days)` }),
       j.summary && h('p', { textContent: j.summary, dir: 'auto' }),
       j.reason && h('div', { className: 'why' }, h('span', { className: 'muted', textContent: 'Why it matches' }), h('p', { textContent: j.reason, dir: 'auto' })),
       /^https?:\/\//i.test(j.url || '') && h('p', {}, h('a', { href: j.url, target: '_blank', rel: 'noopener noreferrer', textContent: 'Open the posting ↗' })),

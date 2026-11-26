@@ -16,7 +16,7 @@ KEYS = (
     "SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "EMAIL_FROM", "EMAIL_TO",
     "GOOGLE_SERVICE_ACCOUNT_FILE", "GOOGLE_SHEET_ID", "GOOGLE_SHEET_TAB",
     "SCORE_WEIGHT_ROLE", "SCORE_WEIGHT_SKILLS", "SCORE_WEIGHT_DOMAIN", "SCORE_WEIGHT_FIT", "HARD_REJECTS", "SCORING_NOTES",
-    "HOME_LOCATION", "MAX_DISTANCE_KM",
+    "HOME_LOCATION", "MAX_DISTANCE_KM", "AUTO_HIDE_DAYS",
 )
 WEIGHTS = ("SCORE_WEIGHT_ROLE", "SCORE_WEIGHT_SKILLS", "SCORE_WEIGHT_DOMAIN", "SCORE_WEIGHT_FIT")
 REJECTS = ("role_family", "seniority", "mandatory")
@@ -106,6 +106,8 @@ def validate(patch: dict) -> dict[str, str]:
             ok = False
         if not ok:
             raise ValueError("MAX_DISTANCE_KM must be a positive number of kilometres")
+    if out.get("AUTO_HIDE_DAYS") and not (out["AUTO_HIDE_DAYS"].isdigit() and int(out["AUTO_HIDE_DAYS"]) > 0):
+        raise ValueError("AUTO_HIDE_DAYS must be a whole number of days (1 or more)")
     if "SMTP_PORT" in out and out["SMTP_PORT"] and not out["SMTP_PORT"].isdigit():
         raise ValueError("SMTP_PORT must be a number")
     return out

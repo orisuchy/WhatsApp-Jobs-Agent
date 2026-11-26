@@ -93,3 +93,34 @@ def test_hidden_false_stays_visible_in_jobs_and_changes_etag(monkeypatch, tmp_pa
         c.patch(f"/api/jobs/{jid}", json={"hidden": False})
         assert c.get("/api/jobs", headers={"If-None-Match": etag}).status_code == 200
         assert next(j for j in c.get("/api/jobs").json() if j["id"] == jid)["hidden"] is False
+
+
+def _age(tmp_path, days):
+    from datetime import datetime, timedelta, timezone
+    p = tmp_path / "matches.jsonl"
+    old = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds")
+    p.write_text("".join(json.dumps({**json.loads(l), "timestamp": old}) + "\n" for l in p.read_text().splitlines()))
+
+
+def test_auto_hide_old_jobs_except_starred_status_or_unhidden(monkeypatch, tmp_path):
+    _setup(monkeypatch, tmp_path, texts=("a job", "b job", "c job", "d job"))
+    _age(tmp_path, 40)
+    monkeypatch.setenv("AUTO_HIDE_DAYS", "30")
+    with TestClient(main.app) as c:
+        ids = [j["id"] for j in c.get("/api/jobs").json()]
+        assert all(j["hidden"] and j["auto_hidden"] for j in c.get("/api/jobs").json())
+        c.patch(f"/api/jobs/{ids[0]}", json={"starred": True})
+        c.patch(f"/api/jobs/{ids[1]}", json={"status": "applied"})
+        c.patch(f"/api/jobs/{ids[2]}", json={"hidden": False})
+        by = {j["id"]: j for j in c.get("/api/jobs").json()}
+        assert not any(by[i].get("hidden") for i in ids[:3])
+        assert by[ids[3]]["hidden"] and by[ids[3]]["auto_hidden"]
+        monkeypatch.setenv("AUTO_HIDE_DAYS", "")
+        assert not any(j.get("hidden") for j in c.get("/api/jobs").json() if j["id"] == ids[3])  # setting off: re-shown
+
+
+def test_recent_jobs_not_auto_hidden(monkeypatch, tmp_path):
+    _setup(monkeypatch, tmp_path)
+    monkeypatch.setenv("AUTO_HIDE_DAYS", "30")
+    with TestClient(main.app) as c:
+        assert not any(j.get("hidden") for j in c.get("/api/jobs").json())

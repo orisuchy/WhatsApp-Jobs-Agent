@@ -161,6 +161,7 @@ Everything below is in the **Settings** tab. Changes apply right away when you c
 | **Groups to watch** | The WhatsApp groups Job Agent reads. |
 | **Minimum score** | Jobs scoring at least this (0–100) count as a match. Default 70. Lower it if you get too few matches, raise it if you get too many. |
 | **Language of summaries** | The language of the summary and reason, for example English or Hebrew. |
+| **Auto-hide after (days)** | Optional. Jobs older than this move to **Hidden jobs**, unless you starred them or gave them a status. Click **Unhide** to keep one for good. Empty = never hide. |
 | **Scoring preferences** | What matters to you (see below). |
 | **Location** | Your home and how far you're willing to travel (see below). |
 | **AI model** | Which AI checks the postings. See [Choosing the AI](#choosing-the-ai). |

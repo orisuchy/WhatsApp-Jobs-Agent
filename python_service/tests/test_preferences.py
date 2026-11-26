@@ -42,7 +42,7 @@ def test_notes_are_included_as_preferences():
     assert "<candidate_preferences>\nNo agencies\n</candidate_preferences>" in p
 
 
-@pytest.mark.parametrize("patch", [{"SCORE_WEIGHT_FIT": "101"}, {"SCORE_WEIGHT_ROLE": "x"}, {"HARD_REJECTS": "salary"}, {"MAX_DISTANCE_KM": "-5"}])
+@pytest.mark.parametrize("patch", [{"SCORE_WEIGHT_FIT": "101"}, {"SCORE_WEIGHT_ROLE": "x"}, {"HARD_REJECTS": "salary"}, {"MAX_DISTANCE_KM": "-5"}, {"AUTO_HIDE_DAYS": "0"}, {"AUTO_HIDE_DAYS": "x"}])
 def test_invalid_preference_settings_rejected(patch):
     with pytest.raises(ValueError):
         settings.validate(patch)

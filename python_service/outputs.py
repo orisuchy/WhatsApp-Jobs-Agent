@@ -125,21 +125,88 @@ def record_if_new(data_dir: str, job: dict) -> bool:
     return True
 
 
+STATE_FILE = "job_state.json"  # the user's own data per job (note, hidden), keyed by job id
+
+
+def _state(data_dir: str) -> dict:
+    try:
+        with open(os.path.join(data_dir, STATE_FILE), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def _write(path: str, text: str) -> None:
+    with open(path + ".tmp", "w", encoding="utf-8") as f:
+        f.write(text)
+    os.replace(path + ".tmp", path)
+
+
 def read_matches(data_dir: str) -> list[dict]:
-    """Matched jobs, newest first."""
+    """Matched jobs, newest first, each with its id (= dedup key) and the user's note/hidden flag."""
     path = os.path.join(data_dir, "matches.jsonl")
     if not os.path.exists(path):
         return []
     with _lock, open(path, encoding="utf-8") as f:
         # ponytail: whole file per poll; paginate/sqlite if it grows large
         lines = [line for line in reversed(f.read().splitlines()) if line.strip()]
+        state = _state(data_dir)
     jobs = []
     for line in lines:
         try:
-            jobs.append(json.loads(line))
+            job = json.loads(line)
         except ValueError:
             logger.warning("Skipping corrupt line in matches.jsonl")
+            continue
+        key = job_key(job.get("text", ""))
+        jobs.append({**job, "id": key, **state.get(key, {})})
     return jobs
+
+
+def update_job(data_dir: str, job_id: str, changes: dict) -> bool:
+    """Set the user's note/hidden flag on a job. Empty values are dropped. False if no such job."""
+    if not any(j["id"] == job_id for j in read_matches(data_dir)):
+        return False
+    with _lock:
+        state = _state(data_dir)
+        entry = {k: v for k, v in {**state.get(job_id, {}), **changes}.items() if v}
+        if entry:
+            state[job_id] = entry
+        else:
+            state.pop(job_id, None)
+        _write(os.path.join(data_dir, STATE_FILE), json.dumps(state, ensure_ascii=False))
+    return True
+
+
+def remove_job(data_dir: str, job_id: str, allow_again: bool) -> bool:
+    """Delete a job from the store. allow_again also forgets its dedup key, so a repost is analysed and
+    can match again; otherwise reposts stay ignored. False if no such job."""
+    path = os.path.join(data_dir, "matches.jsonl")
+    with _lock:
+        try:
+            with open(path, encoding="utf-8") as f:
+                lines = f.read().splitlines()
+        except OSError:
+            return False
+
+        def is_it(line):
+            try:
+                return job_key(json.loads(line).get("text", "")) == job_id
+            except ValueError:
+                return False
+        keep = [line for line in lines if line.strip() and not is_it(line)]
+        if len(keep) == len([line for line in lines if line.strip()]):
+            return False
+        _write(path, "".join(line + "\n" for line in keep))
+        state = _state(data_dir)
+        if state.pop(job_id, None) is not None:
+            _write(os.path.join(data_dir, STATE_FILE), json.dumps(state, ensure_ascii=False))
+        seen = os.path.join(data_dir, "seen_jobs.txt")
+        if allow_again and os.path.exists(seen):
+            with open(seen, encoding="utf-8") as f:
+                keys = [k for k in f.read().split() if k != job_id]
+            _write(seen, "".join(k + "\n" for k in keys))
+    return True
 
 def file_output(job: dict) -> None:
     out = os.environ.get("OUTPUT_DIR") or os.path.join(os.environ.get("DATA_DIR") or "data", "outputs")

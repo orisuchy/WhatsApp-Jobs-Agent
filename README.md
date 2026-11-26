@@ -132,6 +132,9 @@ you. Matches also appear on the **Dashboard**, newest first.
 
 - **See your matches:** open <http://localhost:8000>. Each card shows the score, company, a short
   summary, why it matches, the group, and the original posting.
+- **Keep track of a job:** on its card, **Add note** (who to call, when you applied…; saved
+  automatically), **Hide** it (find it again under *Hidden jobs*), or **Remove…** it. When removing,
+  you choose whether the same posting should show up again if someone reposts it.
 - **Stop Job Agent:** in the Terminal, inside the `job-agent` folder, run `docker compose stop`.
   Or simply quit Docker Desktop.
 - **Start it again:** open Docker Desktop (it starts by itself), or run `docker compose up -d`.

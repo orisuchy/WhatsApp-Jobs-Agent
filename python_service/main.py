@@ -12,7 +12,7 @@ from bs4 import BeautifulSoup
 from typing import Literal
 
 from fastapi.concurrency import run_in_threadpool
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Path, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field, field_validator
 from pypdf import PdfReader
@@ -373,15 +373,40 @@ def api_status() -> dict:
 @app.get("/api/jobs")
 def api_jobs(request: Request):
     """Matched jobs; ETag from the file's mtime/size so the UI's 5 s poll is a cheap 304 when nothing changed."""
-    try:
-        st = os.stat(os.path.join(DATA_DIR, "matches.jsonl"))
-        etag = f'"{st.st_mtime_ns}-{st.st_size}"'
-    except FileNotFoundError:
-        etag = '"empty"'
+    parts = []
+    for name in ("matches.jsonl", outputs.STATE_FILE):  # notes/hidden live in the state file
+        try:
+            st = os.stat(os.path.join(DATA_DIR, name))
+            parts.append(f"{st.st_mtime_ns}-{st.st_size}")
+        except FileNotFoundError:
+            parts.append("none")
+    etag = f'"{"-".join(parts)}"'
     headers = {"ETag": etag, "Cache-Control": "no-cache"}
     if request.headers.get("if-none-match") == etag:
         return Response(status_code=304, headers=headers)
     return JSONResponse(outputs.read_matches(DATA_DIR), headers=headers)
+
+
+JOB_ID = Path(pattern="^[0-9a-f]{64}$")
+
+
+class JobUpdate(BaseModel):
+    note: str | None = Field(None, max_length=5000)
+    hidden: bool | None = None
+
+
+@app.patch("/api/jobs/{job_id}")
+def api_update_job(body: JobUpdate, job_id: str = JOB_ID):
+    if not outputs.update_job(DATA_DIR, job_id, body.model_dump(exclude_none=True)):
+        raise HTTPException(404, "No such job")
+    return {"ok": True}
+
+
+@app.delete("/api/jobs/{job_id}")
+def api_remove_job(job_id: str = JOB_ID, allow_again: bool = False):
+    if not outputs.remove_job(DATA_DIR, job_id, allow_again):
+        raise HTTPException(404, "No such job")
+    return {"ok": True}
 
 # --- Context-window check ----------------------------------------------------
 CHARS_PER_TOKEN = 3  # ponytail: rough and on the safe side (Hebrew tokenises denser than English); use a real tokenizer if this misleads

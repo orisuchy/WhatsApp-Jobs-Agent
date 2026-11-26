@@ -99,6 +99,11 @@
   summary { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 600; }
   pre { white-space: pre-wrap; font: inherit; font-size: 14px; background: var(--bg); padding: .7rem; border-radius: 7px; margin: .5rem 0 0; }
   .empty { text-align: center; color: var(--muted); padding: 2rem 1rem; }
+  .job textarea { min-height: 4.5rem; } .job .actions { padding-top: .3rem; border-top: 1px solid var(--line); }
+  .job .actions button { font-size: 13px; padding: .3rem .7rem; } .job .actions .rm { margin-left: auto; color: var(--bad-fg); }
+  dialog { border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--text); width: min(28rem, calc(100% - 2rem)); padding: 1.2rem; }
+  dialog::backdrop { background: rgb(0 0 0 / .45); }
+  dialog form { display: grid; gap: .8rem; } dialog .row { justify-content: flex-end; }
 
   .drop { display: grid; justify-items: center; gap: .3rem; padding: 1.4rem 1rem; border: 2px dashed var(--line); border-radius: 10px; text-align: center; cursor: pointer; }
   .drop:hover, .drop.over, .drop:focus-within { border-color: var(--accent); background: var(--hover); }
@@ -147,9 +152,19 @@
         <select id="jmin" aria-label="Minimum score">
           <option value="0">Any score</option><option value="60">60% and up</option><option value="70">70% and up</option><option value="80">80% and up</option><option value="90">90% and up</option>
         </select>
+        <select id="jview" aria-label="Which jobs"><option value="active">Active jobs</option><option value="hidden">Hidden jobs</option></select>
       </div>
     </div>
     <div id="jobs" style="display:grid;gap:1rem"></div>
+    <dialog id="rmdlg" aria-labelledby="rmtitle">
+      <form method="dialog">
+        <h2 id="rmtitle">Remove this job?</h2>
+        <p id="rmname" class="muted" dir="auto"></p>
+        <label class="check"><input type="checkbox" id="rmagain"> Show it again if someone posts it again</label>
+        <p class="help">If you leave this off, the same posting is ignored when it shows up again in any group. Your note on it is deleted too.</p>
+        <div class="row"><button value="cancel">Cancel</button><button value="remove" class="primary">Remove</button></div>
+      </form>
+    </dialog>
   </section>
   <section id="tab-settings" hidden>
     <form id="settings" style="display:grid;gap:1rem" novalidate><p class="card muted">Loading settings…</p></form>
@@ -529,9 +544,12 @@ const rel = (iso) => {
 };
 const MAX_JOBS = 200;  // ponytail: plain cap instead of paging; search narrows it
 function renderJobs() {
-  const q = $('jq').value.trim().toLowerCase(), min = +$('jmin').value;
-  const hit = jobs.filter((j) => (j.score ?? 0) >= min && (!q || [j.company, j.summary, j.reason, j.group, j.text].some((t) => (t || '').toLowerCase().includes(q))));
-  $('jobcount').textContent = !jobs.length ? '' : hit.length === jobs.length ? `${jobs.length} total` : `${hit.length} of ${jobs.length}`;
+  const q = $('jq').value.trim().toLowerCase(), min = +$('jmin').value, hidden = $('jview').value === 'hidden';
+  const nHidden = jobs.filter((j) => j.hidden).length;
+  $('jview').options[1].textContent = `Hidden jobs (${nHidden})`;
+  const shown = jobs.filter((j) => !!j.hidden === hidden);
+  const hit = shown.filter((j) => (j.score ?? 0) >= min && (!q || [j.company, j.summary, j.reason, j.group, j.text, j.note].some((t) => (t || '').toLowerCase().includes(q))));
+  $('jobcount').textContent = !shown.length ? '' : hit.length === shown.length ? `${shown.length} total` : `${hit.length} of ${shown.length}`;
   const cards = hit.slice(0, MAX_JOBS).map((j) => {
     const sc = j.score == null ? '' : j.score >= 80 ? ' ok' : j.score >= 60 ? ' warn' : '';
     const when = new Date(j.timestamp);
@@ -543,12 +561,49 @@ function renderJobs() {
       j.summary && h('p', { textContent: j.summary, dir: 'auto' }),
       j.reason && h('div', { className: 'why' }, h('span', { className: 'muted', textContent: 'Why it matches' }), h('p', { textContent: j.reason, dir: 'auto' })),
       /^https?:\/\//i.test(j.url || '') && h('p', {}, h('a', { href: j.url, target: '_blank', rel: 'noopener noreferrer', textContent: 'Open the posting ↗' })),
-      j.text && h('details', {}, h('summary', { textContent: 'Original posting' }), h('pre', { textContent: j.text, dir: 'auto' })));
+      j.text && h('details', {}, h('summary', { textContent: 'Original posting' }), h('pre', { textContent: j.text, dir: 'auto' })),
+      noteBox(j),
+      h('div', { className: 'row actions' },
+        !j.note && h('button', { type: 'button', textContent: 'Add note', onclick: (e) => { const b = noteBoxes.get(j.id); b.hidden = false; b.querySelector('textarea').focus(); e.target.remove(); } }),
+        h('button', { type: 'button', textContent: j.hidden ? 'Unhide' : 'Hide', onclick: () => patchJob(j, { hidden: !j.hidden }, j.hidden ? 'Moved back to active jobs.' : 'Hidden. Find it under "Hidden jobs".') }),
+        h('button', { type: 'button', className: 'rm', textContent: 'Remove…', onclick: () => askRemove(j) })));
   });
   if (hit.length > MAX_JOBS) cards.push(h('p', { className: 'empty', textContent: `Showing the newest ${MAX_JOBS}. Use the search to find older matches.` }));
-  $('jobs').replaceChildren(...(cards.length ? cards : [h('p', { className: 'card empty', textContent: jobs.length ? 'No matches fit these filters.' : 'No matches yet. Matches appear here as postings arrive.' })]));
+  $('jobs').replaceChildren(...(cards.length ? cards : [h('p', { className: 'card empty', textContent: shown.length ? 'No matches fit these filters.' : hidden ? 'No hidden jobs.' : 'No matches yet. Matches appear here as postings arrive.' })]));
 }
-$('jq').oninput = $('jmin').onchange = renderJobs;
+// The note box: always shown when a note exists; "Add note" reveals an empty one. Saved when the box loses focus.
+const noteBoxes = new Map();
+function noteBox(j) {
+  const t = h('textarea', { value: j.note || '', dir: 'auto', placeholder: 'Your notes: who to contact, when you applied, salary…', 'aria-label': 'Your note on this job', maxLength: 5000 });
+  t.onchange = () => patchJob(j, { note: t.value.trim() }, 'Note saved.');
+  const box = h('div', { className: 'field', hidden: !j.note }, h('span', { className: 'muted', textContent: 'Your note' }), t);
+  noteBoxes.set(j.id, box);
+  return box;
+}
+async function patchJob(j, change, msg) {
+  try {
+    await api('/api/jobs/' + j.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(change) });
+    for (const x of jobs) if (x.id === j.id) Object.assign(x, change);  // by id: a poll may have swapped in fresh objects meanwhile
+    if (msg) toast(msg);
+    if ('hidden' in change) renderJobs();
+  } catch (e) { toast('Could not save: ' + e.message, 'bad'); }
+}
+let rmJob = null;
+function askRemove(j) {
+  rmJob = j; $('rmagain').checked = false;
+  $('rmname').textContent = [j.company, j.summary].filter(Boolean).join(' — ');
+  $('rmdlg').showModal();
+}
+$('rmdlg').onclose = async () => {
+  const j = rmJob; rmJob = null;
+  if (!j || $('rmdlg').returnValue !== 'remove') return;
+  try {
+    await api(`/api/jobs/${j.id}?allow_again=${$('rmagain').checked}`, { method: 'DELETE' });
+    jobs = jobs.filter((x) => x.id !== j.id); renderJobs();
+    toast($('rmagain').checked ? 'Removed. It will show up again if it is reposted.' : 'Removed. Reposts of it will be ignored.');
+  } catch (e) { toast('Could not remove: ' + e.message, 'bad'); }
+};
+$('jq').oninput = $('jmin').onchange = $('jview').onchange = renderJobs;
 
 // --- Profile ----------------------------------------------------------------------
 const MODES = { both: 'CV + job description', cv: 'CV only', jd: 'job description only', none: 'nothing yet' };
@@ -613,7 +668,8 @@ async function tick() {
   } catch (e) { if (++fails >= 2) showStatus('unreachable'); }  // one missed poll is not shown, to avoid flicker
   try {
     const r = await fetch('/api/jobs'), raw = await r.text();
-    if (r.ok && raw !== jobsRaw) { jobs = JSON.parse(raw); jobsRaw = raw; renderJobs(); }  // re-render only on new data, so open postings stay open
+    const typing = document.activeElement?.closest?.('#jobs textarea');  // don't wipe a note being written; retry next tick
+    if (r.ok && raw !== jobsRaw && !typing) { jobs = JSON.parse(raw); jobsRaw = raw; renderJobs(); }  // re-render only on new data, so open postings stay open
   } catch (e) { /* keep the last list */ }
   for (const t of document.querySelectorAll('time[datetime]')) t.textContent = rel(t.dateTime);
 }

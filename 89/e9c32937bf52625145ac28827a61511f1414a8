@@ -1,0 +1,26 @@
+python_service/tests/test_export_csv.py
+  s_e39bd4c1fae1d5::t_b3da5e8cf6f9b4 61-70
+python_service/outputs.py
+  s_e39bd4c1fae1d5::t_2d31e27e2a0d4d 181,183
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "89e9c32937bf52625145ac28827a61511f1414a8",
+  "prompts": {},
+  "humans": {
+    "h_0890608decf2a3": {
+      "author": "Ori Suchy <orisuchy@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_e39bd4c1fae1d5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6edbe532-fd42-4135-8a7d-5b497a47f2a3",
+        "model": "claude-haiku-5-5"
+      },
+      "human_author": "Ori Suchy <orisuchy@gmail.com>"
+    }
+  }
+}

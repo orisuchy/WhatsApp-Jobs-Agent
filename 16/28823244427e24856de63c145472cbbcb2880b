@@ -1,0 +1,28 @@
+python_service/static/index.html
+  s_a2c3024074e96c::t_104f04e4aa08ec 551,582,584
+  s_a2c3024074e96c::t_0fdb9b81e76ab2 550,581,583,593
+  s_a2c3024074e96c::t_fadb077a63007e 564
+python_service/tests/test_manage_jobs.py
+  s_a2c3024074e96c::t_fadb077a63007e 86-95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1628823244427e24856de63c145472cbbcb2880b",
+  "prompts": {},
+  "humans": {
+    "h_0890608decf2a3": {
+      "author": "Ori Suchy <orisuchy@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_a2c3024074e96c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "153e03b6-31ef-40fc-b0fd-11390965c3f6",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Ori Suchy <orisuchy@gmail.com>"
+    }
+  }
+}

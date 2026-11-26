@@ -3,7 +3,7 @@
 ## Setup
 
 ```bash
-git clone <repo> && cd job-agent
+git clone https://github.com/orisuchy/WhatsApp-Jobs-Agent.git job-agent && cd job-agent
 cp .env.example .env
 ```
 

@@ -74,8 +74,11 @@ later in the settings. See [Which model for my computer?](#which-model-for-my-co
 
 ### 3. Download Job Agent
 
-On this project's GitHub page click the green **Code** button → **Download ZIP**, and unzip it
-somewhere easy to find, for example your Documents folder. (If you use git: `git clone` works too.)
+Go to <https://github.com/orisuchy/WhatsApp-Jobs-Agent>, click the green **Code** button →
+**Download ZIP**, and unzip it somewhere easy to find, for example your Documents folder.
+**Rename the unzipped folder to `job-agent`**: the next steps use that name.
+
+(If you use git: `git clone https://github.com/orisuchy/WhatsApp-Jobs-Agent.git job-agent`.)
 
 ### 4. Create your settings file
 

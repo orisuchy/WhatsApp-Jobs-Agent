@@ -155,6 +155,12 @@ Set in `.env`. `LLM_PROVIDER=ollama` (default) talks to Ollama natively;
 | LM Studio | `http://host.docker.internal:1234/v1` | the loaded model |
 | Anthropic | `https://api.anthropic.com/v1/` | a Claude model id |
 
+### Scoring preferences and location
+
+The default scoring weighs role & seniority, hard skills and domain experience 30% each and overall fit 10%, and automatically rejects (score ≤ 30) postings for a different role family, a seniority gap of 2+ levels, or a missing mandatory requirement. Change any of it in the web UI (Settings → Scoring preferences) or with the `SCORE_WEIGHT_*`, `HARD_REJECTS` and `SCORING_NOTES` keys in `.env`. `SCORING_NOTES` takes plain-language preferences ("no recruitment agencies", "prefer startups").
+
+Set `HOME_LOCATION` and `MAX_DISTANCE_KM` to reject on-site and hybrid jobs that are too far (straight-line distance). The model extracts each job's location and work mode; the distance is computed in code. Remote jobs and jobs with no clear location are never rejected for distance. Place names — your home and the job's city, never the posting or your CV — are looked up on [OpenStreetMap Nominatim](https://nominatim.org/) and cached in `data/geocache.json`.
+
 **Context-window check:** the web UI (and a startup log line) estimates how many tokens one analysis needs (prompts + your CV/job description + room for the posting and reply) and warns when that doesn't fit the model's context window, with the fix (for Ollama usually: raise `LLM_NUM_CTX`). The window is read from Ollama, or from the provider's `/models` list when it reports one; otherwise the check is skipped.
 
 Also: `LLM_API_KEY` (hosted providers), `LLM_NUM_CTX` (Ollama only, default 16384),

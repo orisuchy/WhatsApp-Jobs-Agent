@@ -31,3 +31,10 @@ def no_provider_calls(monkeypatch):
     """Model metadata lookups hit the network; tests opt in by patching these again."""
     monkeypatch.setattr(main, "model_context", lambda env=None: (None, None))
     monkeypatch.setattr(main, "list_models", lambda env=None: ([], None))
+
+
+@pytest.fixture(autouse=True)
+def no_geocoding(monkeypatch):
+    """Geocoding hits OpenStreetMap; tests that need places patch geo.geocode themselves."""
+    import geo
+    monkeypatch.setattr(geo, "geocode", lambda place, data_dir: None)

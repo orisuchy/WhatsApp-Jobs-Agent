@@ -231,7 +231,9 @@ const OUTPUTS = {
   email: ['Email', 'Send each match by email through your SMTP server.', ['SMTP_HOST', 'EMAIL_FROM', 'EMAIL_TO']],
   sheets: ['Google Sheets', 'Add each match as a row in a spreadsheet.', ['GOOGLE_SERVICE_ACCOUNT_FILE', 'GOOGLE_SHEET_ID']],
 };
-const LABELS = { SOURCE_GROUP_IDS: 'Source groups', TARGET_GROUP_ID: 'Target group', OUTPUTS: 'Outputs' };
+const LABELS = { SOURCE_GROUP_IDS: 'Source groups', TARGET_GROUP_ID: 'Target group', OUTPUTS: 'Outputs', HARD_REJECTS: 'Automatic rejects' };
+const WEIGHTS = [['SCORE_WEIGHT_ROLE', 'Role & seniority', 30], ['SCORE_WEIGHT_SKILLS', 'Hard skills', 30], ['SCORE_WEIGHT_DOMAIN', 'Domain experience', 30], ['SCORE_WEIGHT_FIT', 'Overall fit', 10]];
+const REJECTS = { mandatory: 'It requires something your profile clearly lacks', role_family: 'It is a different kind of role (e.g. chef vs developer)', seniority: 'The seniority gap is 2+ levels (e.g. junior vs lead)' };
 const form = $('settings');
 let base = null, draft = {}, secretsSet = {}, groups = [], groupSig = '', pickers = [], saving = false, me = null;
 const cur = (k) => (k in draft ? draft[k] : base[k] ?? '');
@@ -243,6 +245,7 @@ function setBase(s) {
   base.LLM_PROVIDER = (base.LLM_PROVIDER || 'ollama').toLowerCase();
   base.OUTPUTS = norm((base.OUTPUTS || 'whatsapp').toLowerCase());
   base.SOURCE_GROUP_IDS = norm(base.SOURCE_GROUP_IDS);
+  base.HARD_REJECTS = (base.HARD_REJECTS || '').toLowerCase() === 'none' ? 'none' : norm(base.HARD_REJECTS || Object.keys(REJECTS).join(','));
   for (const k of SECRETS) base[k] = '';
 }
 const isHidden = (k) => !!form.querySelector(`[data-field=${k}]`)?.closest('[hidden]');
@@ -252,13 +255,16 @@ function errors(withHidden) {  // hidden fields (output switched off) must not b
   bad('SMTP_PORT', (v) => !v || /^\d+$/.test(v), 'The port must be a number, for example 587.');
   bad('LLM_NUM_CTX', (v) => !v || /^[1-9]\d*$/.test(v), 'Enter a whole number of tokens, for example 16384.');
   bad('OUTPUTS', (v) => !!v, 'Choose at least one output.');
+  for (const [k] of WEIGHTS) bad(k, (v) => !v || (/^\d+$/.test(v) && +v <= 100), 'Enter a whole number from 0 to 100.');
+  bad('MAX_DISTANCE_KM', (v) => !v || (/^\d+(\.\d+)?$/.test(v) && +v > 0), 'Enter a distance in km, for example 30.');
   return e;
 }
 
 function field(k, label, help, o = {}) {
   LABELS[k] = label;
   const id = 'f-' + k, secret = SECRETS.includes(k);
-  const i = o.options
+  const i = o.textarea ? h('textarea', { id, 'data-k': k, dir: 'auto', placeholder: o.placeholder || '', style: 'min-height:6rem' })
+    : o.options
     ? h('select', { id, 'data-k': k }, ...o.options.map(([value, textContent]) => h('option', { value, textContent })))
     : h('input', { id, 'data-k': k, type: secret ? 'password' : 'text', autocomplete: secret ? 'new-password' : 'off', spellcheck: false, placeholder: o.placeholder || '', ...(o.numeric && { inputMode: 'numeric' }), ...(o.list && { list: o.list }) });
   i.setAttribute('aria-describedby', `${id}-h ${id}-e`);
@@ -344,6 +350,19 @@ function buildForm() {
     card('sec-matching', 'Matching', h('div', { className: 'grid2' },
       field('MATCH_THRESHOLD', 'Minimum score', 'Postings scoring at least this (0–100) count as a match. Default 70.', { placeholder: '70', numeric: true }),
       field('OUTPUT_LANGUAGE', 'Language of summaries', 'For example English or Hebrew.', { placeholder: 'English' }))),
+    card('sec-scoring', 'Scoring preferences',
+      h('p', { className: 'help', textContent: 'How much each part of the match counts. Relative weights: they are scaled to add up to 100%. Set one to 0 to ignore it.' }),
+      h('div', { className: 'grid2' }, ...WEIGHTS.map(([k, label, d]) => field(k, label, '', { placeholder: String(d), numeric: true }))),
+      h('p', { className: 'muted', id: 'wsum', 'aria-live': 'polite' }),
+      h('div', { className: 'field' }, h('b', { textContent: 'Automatically reject a posting (score 30 or lower) when…' }),
+        ...Object.entries(REJECTS).map(([r, text]) => h('label', { className: 'check' }, h('input', { type: 'checkbox', 'data-reject': r }), text))),
+      field('SCORING_NOTES', 'Anything else that matters to you', 'Plain words, any language. For example: no recruitment agencies; prefer startups; no shift work; salary above 30k.', { textarea: true, placeholder: 'e.g. No recruitment agencies. Prefer product companies over consultancies.' })),
+    card('sec-location', 'Location',
+      h('p', { className: 'help', textContent: 'Optional. On-site and hybrid jobs farther than this (straight-line) are rejected; remote jobs and jobs with no clear location never are. Place names are looked up on OpenStreetMap.' }),
+      h('div', { className: 'grid2' },
+        field('HOME_LOCATION', 'Home', 'A city or area is enough.', { placeholder: 'e.g. Modiin, Israel' }),
+        field('MAX_DISTANCE_KM', 'Maximum distance (km)', 'Leave empty to only show distances, never reject.', { placeholder: 'e.g. 30', numeric: true })),
+      h('p', { className: 'muted', id: 'homefound', dir: 'auto' })),
     card('sec-llm', 'AI model', h('div', { className: 'ctxhost' }), h('div', { className: 'grid2' },
       field('LLM_PROVIDER', 'Provider', 'Ollama runs on your computer; nothing leaves it.', { options: [['ollama', 'Ollama (local)'], ['openai', 'OpenAI-compatible API']] }),
       field('LLM_MODEL', 'Model', 'Pick a suggestion or type any model name.', { list: 'models' }),
@@ -354,6 +373,7 @@ function buildForm() {
     card('sec-outputs', 'Where matches go', h('p', { className: 'err', 'data-err': 'OUTPUTS', role: 'alert' }), ...outs));
   form.addEventListener('input', (e) => { const k = e.target.dataset.k; if (k) set(k, e.target.value.trim()); });
   form.addEventListener('change', (e) => {
+    if (e.target.dataset.reject) set('HARD_REJECTS', norm([...form.querySelectorAll('[data-reject]:checked')].map((c) => c.dataset.reject).join(',')) || 'none');
     if (e.target.dataset.out) set('OUTPUTS', [...form.querySelectorAll('[data-out]:checked')].map((c) => c.dataset.out).sort().join(','));
   });
   form.addEventListener('submit', (e) => e.preventDefault());
@@ -373,6 +393,10 @@ function changed() {
   if (!base) return;
   const outs = list(cur('OUTPUTS'));
   for (const c of form.querySelectorAll('[data-out]')) c.checked = outs.includes(c.dataset.out);
+  const rej = list(cur('HARD_REJECTS'));
+  for (const c of form.querySelectorAll('[data-reject]')) c.checked = rej.includes(c.dataset.reject);
+  const w = WEIGHTS.map(([k, label, d]) => [label, /^\d+$/.test(cur(k)) ? +cur(k) : d]), total = w.reduce((a, [, v]) => a + v, 0);
+  if ($('wsum')) $('wsum').textContent = total ? 'Counts as: ' + w.filter(([, v]) => v).map(([l, v]) => `${l} ${Math.round(100 * v / total)}%`).join(' · ') : 'All zero: the default weights are used.';
   for (const d of form.querySelectorAll('[data-for]')) d.hidden = !outs.includes(d.dataset.for);
   const ctxField = form.querySelector('[data-field=LLM_NUM_CTX]'); if (ctxField) ctxField.hidden = cur('LLM_PROVIDER') !== 'ollama';
   const errs = errors();
@@ -395,7 +419,7 @@ function updateBar() {
 async function loadSettings() {
   setBase(await api('/api/settings'));
   if (!form.querySelector('fieldset')) buildForm();
-  sync(); renderSetup(); renderCtx();
+  sync(); renderSetup(); renderCtx(); loadHome();
 }
 $('save').onclick = async () => {
   for (const k of Object.keys(errors(true))) delete draft[k];  // invalid values left in fields that are now hidden
@@ -414,7 +438,14 @@ addEventListener('beforeunload', (e) => { if (dirtyKeys().length || jdDirty()) {
 
 // --- AI: context-window check + model suggestions (endpoints may not exist yet: 404 hides them) ---
 let ctx = null;
+async function loadHome() {
+  const r = await api('/api/home').catch(() => null), el = $('homefound');
+  if (!el) return;
+  el.textContent = !r || !r.query ? '' : r.found ? 'Found: ' + r.name : `Could not find "${r.query}" on the map. Try a city name, e.g. "Haifa, Israel".`;
+  el.className = r && r.query && !r.found ? 'err' : 'muted';
+}
 async function loadAi() {
+  loadHome();
   ctx = await api('/api/context').catch(() => null);
   renderCtx();
   const m = await api('/api/models').catch(() => null), dl = $('models');
@@ -507,6 +538,8 @@ function renderJobs() {
     return h('article', { className: 'card job' },
       h('header', {}, h('span', { className: 'score' + sc, textContent: j.score == null ? '—' : j.score + '%', title: 'Match score' }), h('h3', { textContent: j.company || 'Unknown company', dir: 'auto' })),
       h('p', { className: 'muted' }, h('time', { dateTime: j.timestamp || '', textContent: rel(j.timestamp), title: isNaN(when) ? '' : when.toLocaleString() }), ' · ', h('bdi', { textContent: j.group || 'no group' })),
+      (() => { const w = [j.location && j.location !== 'Unknown' && j.location, j.work_mode && j.work_mode !== 'unknown' && j.work_mode, j.distance_km != null && `${j.distance_km} km from home`].filter(Boolean);
+        return w.length ? h('p', { className: 'muted', dir: 'auto', textContent: '📍 ' + w.join(' · ') }) : null; })(),
       j.summary && h('p', { textContent: j.summary, dir: 'auto' }),
       j.reason && h('div', { className: 'why' }, h('span', { className: 'muted', textContent: 'Why it matches' }), h('p', { textContent: j.reason, dir: 'auto' })),
       /^https?:\/\//i.test(j.url || '') && h('p', {}, h('a', { href: j.url, target: '_blank', rel: 'noopener noreferrer', textContent: 'Open the posting ↗' })),

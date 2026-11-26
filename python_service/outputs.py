@@ -87,6 +87,13 @@ def format_whatsapp(job: dict, language: str, bold: str = "*") -> str:
         f"{bold}{summary}:{bold} {job['summary']}",
         f"{bold}{company}:{bold} {job['company']}",
         f"{bold}{reason}:{bold} {job['reason']}",
+    ]
+    where = [x for x in (job.get("location") if job.get("location") not in (None, "", "Unknown") else None,
+                         job.get("work_mode") if job.get("work_mode") not in (None, "unknown") else None,
+                         f"{job['distance_km']} km" if job.get("distance_km") is not None else None) if x]
+    if where:
+        lines.append("📍 " + " · ".join(where))
+    lines += [
         "",
         f"--- {original} ---",
         job["text"],
@@ -221,6 +228,9 @@ def process_match(result: dict, text: str, group: str, data_dir: str, language: 
         "reason": result.get("reason", ""),
         "text": text,
         "url": first_url(text),
+        "location": result.get("location", "Unknown"),
+        "work_mode": result.get("work_mode", "unknown"),
+        "distance_km": result.get("distance_km"),
     }
     if not record_if_new(data_dir, job):
         logger.info("Duplicate job dropped (%s)", job["url"] or job["text"][:60])

@@ -15,7 +15,11 @@ KEYS = (
     "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
     "SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "EMAIL_FROM", "EMAIL_TO",
     "GOOGLE_SERVICE_ACCOUNT_FILE", "GOOGLE_SHEET_ID", "GOOGLE_SHEET_TAB",
+    "SCORE_WEIGHT_ROLE", "SCORE_WEIGHT_SKILLS", "SCORE_WEIGHT_DOMAIN", "SCORE_WEIGHT_FIT", "HARD_REJECTS", "SCORING_NOTES",
+    "HOME_LOCATION", "MAX_DISTANCE_KM",
 )
+WEIGHTS = ("SCORE_WEIGHT_ROLE", "SCORE_WEIGHT_SKILLS", "SCORE_WEIGHT_DOMAIN", "SCORE_WEIGHT_FIT")
+REJECTS = ("role_family", "seniority", "mandatory")
 SECRETS = ("LLM_API_KEY", "TELEGRAM_BOT_TOKEN", "SMTP_PASSWORD")
 PROVIDERS = ("ollama", "openai")
 OUTPUT_NAMES = ("whatsapp", "file", "telegram", "email", "sheets")
@@ -87,6 +91,21 @@ def validate(patch: dict) -> dict[str, str]:
         out["OUTPUTS"] = ",".join(names)
     if out.get("LLM_NUM_CTX") and not (out["LLM_NUM_CTX"].isdigit() and int(out["LLM_NUM_CTX"]) >= 512):
         raise ValueError("LLM_NUM_CTX must be a number of tokens (512 or more)")
+    for k in WEIGHTS:
+        if out.get(k) and not (out[k].isdigit() and int(out[k]) <= 100):
+            raise ValueError(f"{k} must be a whole number from 0 to 100")
+    if out.get("HARD_REJECTS"):
+        out["HARD_REJECTS"] = out["HARD_REJECTS"].lower()
+        bad = [r for r in out["HARD_REJECTS"].split(",") if r.strip() and r.strip() not in (*REJECTS, "none")]
+        if bad:
+            raise ValueError(f"Unknown hard reject(s): {', '.join(bad)}")
+    if out.get("MAX_DISTANCE_KM"):
+        try:
+            ok = float(out["MAX_DISTANCE_KM"]) > 0
+        except ValueError:
+            ok = False
+        if not ok:
+            raise ValueError("MAX_DISTANCE_KM must be a positive number of kilometres")
     if "SMTP_PORT" in out and out["SMTP_PORT"] and not out["SMTP_PORT"].isdigit():
         raise ValueError("SMTP_PORT must be a number")
     return out

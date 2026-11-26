@@ -7,7 +7,7 @@ import pytest
 from llm import OllamaLLM, OpenAILLM, complete_json, load_llm_client
 from main import JobMatchingResult
 
-GOOD = {"odds": 80, "reason": "r", "company": "Acme", "summary": "s"}
+GOOD = {"odds": 80, "reason": "r", "company": "Acme", "summary": "s", "location": "Tel Aviv", "work_mode": "hybrid"}
 
 
 class FakeLLM:
@@ -141,3 +141,10 @@ def test_is_timeout():
     assert is_timeout(httpx.ReadTimeout("x"))
     assert is_timeout(openai.APITimeoutError(request=httpx.Request("POST", "http://x")))
     assert not is_timeout(ValueError("x"))
+
+
+def test_location_fields_default_and_work_mode_normalised():
+    r = JobMatchingResult(odds=50, reason="r", company="c", summary="s")
+    assert (r.location, r.work_mode) == ("Unknown", "unknown")
+    assert JobMatchingResult(odds=50, reason="r", company="c", summary="s", work_mode="On-site").work_mode == "onsite"
+    assert JobMatchingResult(odds=50, reason="r", company="c", summary="s", work_mode="flexible").work_mode == "unknown"

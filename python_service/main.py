@@ -19,7 +19,8 @@ from pypdf import PdfReader
 import requests
 
 from llm import complete_json, list_models, load_llm_client, log_if_timeout, model_context
-from prompts import CV_ORGANIZER, evaluation_prompt
+from prompts import CV_ORGANIZER, evaluation_prompt, scoring_prefs
+import geo
 import outputs
 import settings
 from logger import setup_logger
@@ -40,6 +41,14 @@ class JobMatchingResult(BaseModel):
     reason: str = Field(..., description="One-sentence explanation of the score")
     company: str = Field(..., description="Name of the hiring company, or 'Unknown'")
     summary: str = Field(..., description="1-2 sentence summary of the job")
+    location: str = Field("Unknown", description="Where the job is (city/region/country), or 'Unknown'")
+    work_mode: Literal["remote", "hybrid", "onsite", "unknown"] = Field("unknown", description="remote, hybrid, onsite or unknown")
+
+    @field_validator("work_mode", mode="before")
+    @classmethod
+    def _coerce_work_mode(cls, v):
+        v = str(v or "").strip().lower().replace("-", "").replace(" ", "")
+        return {"onsite": "onsite", "office": "onsite", "remote": "remote", "hybrid": "hybrid"}.get(v, "unknown")
 
     @field_validator("odds", mode="before")
     @classmethod
@@ -152,7 +161,7 @@ def build_messages(posting_text: str, fetched_data: str, cv_text: str, company_n
         profile_sections += f"<desired_job_description>\n{jd_text}\n</desired_job_description>\n\n"
 
     return [
-        {"role": "system", "content": evaluation_prompt(mode, OUTPUT_LANGUAGE)},
+        {"role": "system", "content": evaluation_prompt(mode, OUTPUT_LANGUAGE, scoring_prefs(os.environ))},
         {
             "role": "user",
             "content": f"""
@@ -325,6 +334,8 @@ def analyze(posting: JobPosting) -> dict:
     fetched_data, company_name = extract_fetched_data(posting.text)
     with llm_lock:
         result = analyze_job_posting(posting.text, fetched_data, CV_TEXT, llm_client, company_name, JD_TEXT)
+    if result.get("odds", 0) >= outputs.match_threshold():  # only would-be matches: keeps geocoding traffic tiny
+        result = geo.apply_distance(result, os.environ, DATA_DIR)
     return outputs.process_match(result, posting.text, posting.group, DATA_DIR, OUTPUT_LANGUAGE)
 
 
@@ -428,6 +439,14 @@ def log_context_warning() -> None:
 @app.get("/api/context")
 def api_context() -> dict:
     return context_report()
+
+
+@app.get("/api/home")
+def api_home() -> dict:
+    """How HOME_LOCATION was understood, so the user can check it in the UI."""
+    query = (os.environ.get("HOME_LOCATION") or "").strip()
+    hit = geo.geocode(query, DATA_DIR) if query else None
+    return {"query": query, "found": bool(hit), "name": hit["name"] if hit else None}
 
 
 @app.get("/api/models")

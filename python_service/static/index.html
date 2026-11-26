@@ -547,6 +547,8 @@ const rel = (iso) => {
 const STATUSES = [['', '—'], ['interested', 'Interested'], ['applied', 'Applied'], ['interview', 'Interview'], ['offer', 'Offer'], ['rejected', 'Rejected']];
 const MAX_JOBS = 200;  // ponytail: plain cap instead of paging; search narrows it
 function renderJobs() {
+  const drafts = new Map([...noteBoxes].map(([id, b]) => [id, b.querySelector('textarea')]));  // unsaved text survives a re-render
+  const focusId = [...noteBoxes].find(([, b]) => b.contains(document.activeElement))?.[0];
   const q = $('jq').value.trim().toLowerCase(), min = +$('jmin').value, hidden = $('jview').value === 'hidden';
   const nHidden = jobs.filter((j) => j.hidden).length;
   $('jview').options[1].textContent = `Hidden jobs (${nHidden})`;
@@ -559,7 +561,7 @@ function renderJobs() {
     const sc = j.score == null ? '' : j.score >= 80 ? ' ok' : j.score >= 60 ? ' warn' : '';
     const when = new Date(j.timestamp);
     return h('article', { className: 'card job' },
-      h('header', {}, h('button', { type: 'button', className: 'link star', textContent: j.starred ? '★' : '☆', 'aria-pressed': String(!!j.starred), 'aria-label': 'Star this job', onclick: () => patchJob(j, { starred: !j.starred }) }), h('span', { className: 'score' + sc, textContent: j.score == null ? '—' : j.score + '%', title: 'Match score' }), h('h3', { textContent: j.company || 'Unknown company', dir: 'auto' })),
+      h('header', {}, h('button', { type: 'button', className: 'link star', textContent: j.starred ? '★' : '☆', 'aria-pressed': String(!!j.starred), 'aria-label': j.starred ? 'Unstar this job' : 'Star this job', onclick: () => patchJob(j, { starred: !j.starred }) }), h('span', { className: 'score' + sc, textContent: j.score == null ? '—' : j.score + '%', title: 'Match score' }), h('h3', { textContent: j.company || 'Unknown company', dir: 'auto' })),
       h('p', { className: 'muted' }, h('time', { dateTime: j.timestamp || '', textContent: rel(j.timestamp), title: isNaN(when) ? '' : when.toLocaleString() }), ' · ', h('bdi', { textContent: j.group || 'no group' })),
       (() => { const w = [j.location && j.location !== 'Unknown' && j.location, j.work_mode && j.work_mode !== 'unknown' && j.work_mode, j.distance_km != null && `${j.distance_km} km from home`].filter(Boolean);
         return w.length ? h('p', { className: 'muted', dir: 'auto', textContent: '📍 ' + w.join(' · ') }) : null; })(),
@@ -576,6 +578,10 @@ function renderJobs() {
         h('button', { type: 'button', className: 'rm', textContent: 'Remove…', onclick: () => askRemove(j) })));
   });
   if (hit.length > MAX_JOBS) cards.push(h('p', { className: 'empty', textContent: `Showing the newest ${MAX_JOBS}. Use the search to find older matches.` }));
+  for (const [id, old] of drafts) {  // only text the user typed and not yet saved
+    const b = noteBoxes.get(id), t = b?.querySelector('textarea');
+    if (t && old !== t && old.value !== (old.dataset.saved || '')) { t.value = old.value; b.hidden = false; if (id === focusId) t.focus(); }
+  }
   $('jobs').replaceChildren(...(cards.length ? cards : [h('p', { className: 'card empty', textContent: shown.length ? 'No matches fit these filters.' : hidden ? 'No hidden jobs.' : 'No matches yet. Matches appear here as postings arrive.' })]));
 }
 // The note box: always shown when a note exists; "Add note" reveals an empty one. Saved when the box loses focus.
@@ -584,6 +590,7 @@ function noteBox(j) {
   const t = h('textarea', { value: j.note || '', dir: 'auto', placeholder: 'Your notes: who to contact, when you applied, salary…', 'aria-label': 'Your note on this job', maxLength: 5000 });
   t.onchange = () => patchJob(j, { note: t.value.trim() }, 'Note saved.');
   const box = h('div', { className: 'field', hidden: !j.note }, h('span', { className: 'muted', textContent: 'Your note' }), t);
+  t.dataset.saved = j.note || '';
   noteBoxes.set(j.id, box);
   return box;
 }

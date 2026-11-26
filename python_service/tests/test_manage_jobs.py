@@ -83,3 +83,13 @@ def test_unhide_is_remembered_and_invalid_status_rejected(monkeypatch, tmp_path)
         assert c.patch(f"/api/jobs/{jid}", json={"status": "maybe"}).status_code == 422
         c.patch(f"/api/jobs/{jid}", json={"hidden": False})
         assert json.loads((tmp_path / outputs.STATE_FILE).read_text())[jid] == {"hidden": False}
+
+
+def test_hidden_false_stays_visible_in_jobs_and_changes_etag(monkeypatch, tmp_path):
+    _setup(monkeypatch, tmp_path)
+    with TestClient(main.app) as c:
+        jid = c.get("/api/jobs").json()[0]["id"]
+        etag = c.get("/api/jobs").headers["etag"]
+        c.patch(f"/api/jobs/{jid}", json={"hidden": False})
+        assert c.get("/api/jobs", headers={"If-None-Match": etag}).status_code == 200
+        assert next(j for j in c.get("/api/jobs").json() if j["id"] == jid)["hidden"] is False

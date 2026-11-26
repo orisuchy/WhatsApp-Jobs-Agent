@@ -58,3 +58,13 @@ def test_empty_store_gives_only_the_header(monkeypatch, tmp_path):
         r, text = _csv(c)
     assert r.status_code == 200
     assert text.splitlines() == [",".join(outputs.CSV_HEADER)]
+
+
+def test_starred_and_hidden_jobs_export_as_yes(monkeypatch, tmp_path):
+    _setup(monkeypatch, tmp_path)
+    with TestClient(main.app) as c:
+        jid = c.get("/api/jobs").json()[0]["id"]
+        c.patch(f"/api/jobs/{jid}", json={"starred": True, "hidden": True})
+        _, text = _csv(c)
+    row = next(csv.DictReader(io.StringIO(text)))
+    assert row["starred"] == "yes" and row["hidden"] == "yes"

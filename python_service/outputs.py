@@ -178,8 +178,9 @@ def _csv_safe(value):
 
 def matches_csv(data_dir: str) -> str:
     """All matched jobs with the user's fields, as CSV text with a UTF-8 BOM (Excel reads Hebrew then)."""
+    # ponytail: whole store in memory per download; stream rows if the store grows large
     out = io.StringIO()
-    out.write("﻿")
+    out.write("\ufeff")  # BOM as an escape: editors can silently strip a literal one
     w = csv.writer(out)
     w.writerow(CSV_HEADER)
     for j in read_matches(data_dir):

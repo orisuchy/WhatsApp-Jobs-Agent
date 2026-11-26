@@ -13,7 +13,6 @@ from typing import Literal
 
 from fastapi.concurrency import run_in_threadpool
 from fastapi import FastAPI, HTTPException, Path, Request
-from fastapi.responses import Response
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field, field_validator
 from pypdf import PdfReader

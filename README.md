@@ -137,6 +137,7 @@ you. Matches also appear on the **Dashboard**, newest first.
   you choose whether the same posting should show up again if someone reposts it.
 - **Star a job:** click the ☆ on its card. Starred jobs stay at the top of the list.
 - **Track your application:** pick *Interested*, *Applied*, *Interview*, *Offer* or *Rejected* on a card, and use the status filter above the list to see only those.
+- **Export your list:** click **Export CSV** next to the job count to download all your matches, with your notes, statuses and stars, as a file you can open in Excel or Google Sheets.
 - **Stop Job Agent:** in the Terminal, inside the `job-agent` folder, run `docker compose stop`.
   Or simply quit Docker Desktop.
 - **Start it again:** open Docker Desktop (it starts by itself), or run `docker compose up -d`.

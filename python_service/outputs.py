@@ -1,5 +1,7 @@
 """Matched-jobs store, dedup, message formatting and output destinations."""
+import csv
 import hashlib
+import io
 import json
 import os
 import re
@@ -161,6 +163,32 @@ def read_matches(data_dir: str) -> list[dict]:
         key = job_key(job.get("text", ""))
         jobs.append({**job, "id": key, **state.get(key, {})})
     return jobs
+
+
+CSV_HEADER = ["date", "score", "company", "summary", "reason", "group", "URL", "status", "starred", "hidden",
+              "note", "reminder", "original text"]
+STATUS_LABELS = {"interested": "Interested", "applied": "Applied", "interview": "Interview", "offer": "Offer",
+                 "rejected": "Rejected"}
+
+
+def _csv_safe(value):
+    """A cell Excel/Sheets would run as a formula (posting text can start with '=') gets a leading quote."""
+    return "'" + value if isinstance(value, str) and value[:1] in ("=", "+", "-", "@") else value
+
+
+def matches_csv(data_dir: str) -> str:
+    """All matched jobs with the user's fields, as CSV text with a UTF-8 BOM (Excel reads Hebrew then)."""
+    out = io.StringIO()
+    out.write("﻿")
+    w = csv.writer(out)
+    w.writerow(CSV_HEADER)
+    for j in read_matches(data_dir):
+        w.writerow([_csv_safe(v) for v in (
+            j.get("timestamp", ""), j.get("score", ""), j.get("company", ""), j.get("summary", ""),
+            j.get("reason", ""), j.get("group", ""), j.get("url") or "", STATUS_LABELS.get(j.get("status"), ""),
+            "yes" if j.get("starred") else "", "yes" if j.get("hidden") else "", j.get("note", ""),
+            j.get("remind_at", ""), j.get("text", ""))])
+    return out.getvalue()
 
 
 def update_job(data_dir: str, job_id: str, changes: dict) -> bool:

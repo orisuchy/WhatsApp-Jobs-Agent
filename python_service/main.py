@@ -13,6 +13,7 @@ from typing import Literal
 
 from fastapi.concurrency import run_in_threadpool
 from fastapi import FastAPI, HTTPException, Path, Request
+from fastapi.responses import Response
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field, field_validator
 from pypdf import PdfReader
@@ -395,6 +396,12 @@ class JobUpdate(BaseModel):
     hidden: bool | None = None
     starred: bool | None = None
     status: Literal["", "interested", "applied", "interview", "offer", "rejected"] | None = None
+
+
+@app.get("/api/jobs.csv")
+def api_jobs_csv() -> Response:
+    return Response(outputs.matches_csv(DATA_DIR), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="job-matches.csv"'})
 
 
 @app.patch("/api/jobs/{job_id}")

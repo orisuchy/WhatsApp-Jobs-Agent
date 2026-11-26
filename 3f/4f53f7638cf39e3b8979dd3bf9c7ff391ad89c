@@ -1,0 +1,27 @@
+node_service/whatsapp-agent.test.js
+  s_f0b3d055912f99::t_d7eadcddd4ed75 32-52
+node_service/whatsapp-agent.js
+  s_f0b3d055912f99::t_15a3a2a2d36317 20
+  s_f0b3d055912f99::t_54b7062e03bc3d 5-7,9,11-12,14-19,22-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3f4f53f7638cf39e3b8979dd3bf9c7ff391ad89c",
+  "prompts": {},
+  "humans": {
+    "h_0890608decf2a3": {
+      "author": "Ori Suchy <orisuchy@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_f0b3d055912f99": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0ae6c7fd-7e45-4536-ba8e-74fd39250ca1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Ori Suchy <orisuchy@gmail.com>"
+    }
+  }
+}

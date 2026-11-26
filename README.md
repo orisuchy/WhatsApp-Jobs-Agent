@@ -323,13 +323,15 @@ This one has the most steps.
 
 1. In the [Google Cloud console](https://console.cloud.google.com/), create a project, then go to
    **APIs & Services → Library** and enable **Google Sheets API**.
-2. Go to **IAM & Admin → Service Accounts**, create one, then **Keys → Add key → JSON**. Save the
-   downloaded file as `service-account.json` in the `data` folder inside job-agent. Never share this file.
-3. Open your Google Sheet, click **Share**, and share it (as Editor) with the service account's
-   email address (it ends in `.iam.gserviceaccount.com`).
-4. Tick **Google Sheets** and fill in: key file `/data/service-account.json`, and the sheet id
-   (the long code in the sheet's address, between `/d/` and `/edit`).
-5. Click **Save settings**.
+2. Go to **IAM & Admin → Service Accounts**, create one, then **Keys → Add key → JSON**. A key
+   file downloads to your computer. Keep it private: it works like a password.
+3. In Job Agent, tick **Google Sheets**, click **Upload key file** and choose that file.
+   The page then shows an email address ending in `.iam.gserviceaccount.com`.
+4. Open your Google Sheet, click **Share**, and share it with that email address as **Editor**.
+5. Back in Job Agent, fill in the sheet id (the long code in the sheet's address, between `/d/`
+   and `/edit`) and, if you want, the tab name. Click **Test connection**: it tells you what to
+   fix if something is wrong.
+6. Click **Save settings**.
 
 A header row is added if the sheet is empty, then one row per match.
 </details>

@@ -344,6 +344,39 @@ function picker(key, multi, label) {
   return h('div', { style: 'display:grid;gap:.5rem' }, search, tools, box);
 }
 
+// Google Sheets: upload the service-account key (no file paths), show which email to share the sheet with, test it.
+function sheetKey() {
+  const input = h('input', { className: 'vh', type: 'file', accept: '.json,application/json' });
+  const title = h('b', { id: 'keytitle', textContent: 'Upload key file' }), info = h('p', { className: 'help', id: 'keyinfo', dir: 'auto' });
+  input.onchange = async () => {
+    const f = input.files[0]; input.value = '';
+    if (!f) return;
+    try {
+      showKey((await api('/api/sheets/key', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: f })).client_email);
+      toast('Key file saved'); setBase(await api('/api/settings')); sync(); renderSetup();
+    } catch (e) { toast('Key not saved: ' + e.message, 'bad'); }
+  };
+  api('/api/sheets').then((r) => showKey(r.client_email)).catch(() => {});
+  return h('div', { className: 'field' }, h('b', { textContent: 'Service-account key file' }),
+    h('label', { className: 'drop' }, input, title, h('span', { className: 'help', textContent: 'Choose the JSON key file you downloaded from Google Cloud.' })), info);
+}
+function showKey(email) {
+  $('keytitle').textContent = email ? 'Key uploaded ✓ (click to replace)' : 'Upload key file';
+  $('keyinfo').replaceChildren(...(email ? ['Share your sheet (Share button in Google Sheets) with ', h('code', { textContent: email, dir: 'ltr' }), ' as Editor.'] : ['No key uploaded yet.']));
+}
+function sheetTest() {
+  const res = h('span', { role: 'status', dir: 'auto' }), btn = h('button', { type: 'button', textContent: 'Test connection' });
+  btn.onclick = async () => {
+    btn.disabled = true; res.className = 'muted'; res.textContent = 'Testing…';
+    try {
+      const r = await api('/api/sheets/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sheet_id: cur('GOOGLE_SHEET_ID'), tab: cur('GOOGLE_SHEET_TAB') }) });
+      res.className = ''; res.textContent = `✓ Connected to tab “${r.tab}”.` + (dirtyKeys().some((k) => k.startsWith('GOOGLE_')) ? ' Now save settings.' : '');
+    } catch (e) { res.className = 'err'; res.textContent = e.message; }
+    btn.disabled = false;
+  };
+  return h('div', { className: 'row' }, btn, res);
+}
+
 function buildForm() {
   const outs = Object.entries(OUTPUTS).map(([o, [title, help]]) => {
     const body = h('div', { 'data-for': o, hidden: true });
@@ -358,10 +391,9 @@ function buildForm() {
       field('SMTP_USER', 'Username', 'Usually your email address.'),
       field('SMTP_PASSWORD', 'Password', 'Gmail needs an app password, not your account password.'),
       field('EMAIL_FROM', 'From address', ''), field('EMAIL_TO', 'Send to', 'Separate several addresses with commas.')));
-    if (o === 'sheets') body.append(h('div', { className: 'grid2' },
-      field('GOOGLE_SERVICE_ACCOUNT_FILE', 'Service-account key file', 'Path to the JSON key, e.g. /data/service-account.json. Share the sheet with that account’s email.'),
+    if (o === 'sheets') body.append(sheetKey(), h('div', { className: 'grid2' },
       field('GOOGLE_SHEET_ID', 'Sheet id', 'The long id in the sheet’s URL, between /d/ and /edit.'),
-      field('GOOGLE_SHEET_TAB', 'Tab name', 'Leave empty to use the first tab.')));
+      field('GOOGLE_SHEET_TAB', 'Tab name', 'Leave empty to use the first tab.')), sheetTest());
     if (!body.children.length) body.remove();
     return h('div', { className: 'out' }, h('label', { className: 'check' }, h('input', { type: 'checkbox', 'data-out': o }),
       h('span', {}, h('b', { textContent: title }), h('span', { className: 'help', textContent: ' — ' + help }))), body.children.length ? body : null);

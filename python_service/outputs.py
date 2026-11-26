@@ -350,12 +350,57 @@ def _email_send(subject: str, text: str) -> None:
             smtp.login(user, os.environ.get("SMTP_PASSWORD", ""))
         smtp.send_message(msg)
 
-def _open_worksheet():
+def _open_worksheet(sheet_id: str | None = None, tab: str | None = None):
     import gspread  # lazy: only needed when `sheets` is enabled
 
-    sheet = gspread.service_account(filename=key_file()).open_by_key(os.environ["GOOGLE_SHEET_ID"])
-    tab = os.environ.get("GOOGLE_SHEET_TAB")
+    sheet = gspread.service_account(filename=key_file()).open_by_key(sheet_id or os.environ["GOOGLE_SHEET_ID"])
+    tab = os.environ.get("GOOGLE_SHEET_TAB") if tab is None else tab
     return sheet.worksheet(tab) if tab else sheet.sheet1
+
+
+def check_service_account_key(data: bytes) -> str:
+    """Returns the key's client_email; ValueError with a user-facing message if it isn't a service-account key."""
+    try:
+        key = json.loads(data)
+    except ValueError:
+        raise ValueError("That file is not JSON. Download the key as JSON from Google Cloud.")
+    if not isinstance(key, dict) or key.get("type") != "service_account" or not key.get("client_email") or not key.get("private_key"):
+        raise ValueError("That is not a Google service-account key (it needs type service_account, client_email and private_key).")
+    return key["client_email"]
+
+
+def sheet_key_email() -> str | None:
+    try:
+        with open(key_file(), "rb") as f:
+            return check_service_account_key(f.read())
+    except (OSError, ValueError):
+        return None
+
+
+def test_sheet(sheet_id: str, tab: str) -> str:
+    """Opens the sheet read-only; returns the tab title or raises ValueError saying what to fix."""
+    import gspread
+
+    email = sheet_key_email()
+    if not email:
+        raise ValueError("Upload the service-account key file first.")
+    if not sheet_id:
+        raise ValueError("Enter the sheet id.")
+    try:
+        return _open_worksheet(sheet_id, tab).title
+    except gspread.exceptions.SpreadsheetNotFound:
+        raise ValueError(f"Sheet not found. Check the sheet id, and share the sheet with {email} as Editor.")
+    except gspread.exceptions.WorksheetNotFound:
+        raise ValueError(f"The sheet has no tab named {tab!r}. Fix the tab name or leave it empty.")
+    except gspread.exceptions.APIError as e:
+        msg = str(e)
+        if "has not been used" in msg or "disabled" in msg:
+            raise ValueError("The Google Sheets API is not enabled in your Google Cloud project. Enable it and try again.")
+        if "PERMISSION_DENIED" in msg or "403" in msg:
+            raise ValueError(f"No access. Share the sheet with {email} as Editor.")
+        raise ValueError("Google said: " + msg[:300])
+    except Exception as e:  # bad/expired key, no network, ...
+        raise ValueError(f"Could not open the sheet: {e}"[:300])
 
 
 def sheets_output(job: dict) -> None:

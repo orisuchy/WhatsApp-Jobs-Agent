@@ -585,6 +585,45 @@ def put_settings(patch: dict) -> dict:
     outputs.warn_missing_config()  # else a destination switched off by a bad setting is silent until restart
     return settings.public()
 
+MAX_KEY_BYTES = 64 * 1024
+
+@app.get("/api/sheets")
+def get_sheets() -> dict:
+    """Only the account email, never the key itself."""
+    return {"client_email": outputs.sheet_key_email()}
+
+@app.post("/api/sheets/key")
+async def upload_sheet_key(request: Request) -> dict:
+    """Raw JSON body: the service-account key, saved as data/google-key.json and selected in settings."""
+    data = await request.body()
+    try:
+        if len(data) > MAX_KEY_BYTES:
+            raise ValueError("That file is too big to be a service-account key.")
+        email = outputs.check_service_account_key(data)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    path = os.path.join(DATA_DIR, "google-key.json")
+    tmp = path + ".tmp"
+    with open(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as f:  # a credential: owner-only
+        f.write(data)
+    os.replace(tmp, path)
+    with llm_lock:
+        settings.save(DATA_DIR, {"GOOGLE_SERVICE_ACCOUNT_FILE": path})
+        reload_settings()
+    return {"client_email": email}
+
+class SheetTest(BaseModel):
+    sheet_id: str = ""
+    tab: str = ""
+
+@app.post("/api/sheets/test")
+def test_sheets(body: SheetTest) -> dict:
+    """Tests the values shown in the form (saved or not); read-only."""
+    try:
+        return {"tab": outputs.test_sheet(body.sheet_id.strip(), body.tab.strip())}
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+
 MAX_CV_BYTES = 10 * 1024 * 1024
 
 def profile_info() -> dict:

@@ -1,0 +1,32 @@
+python_service/static/index.html
+  s_2da0e147e997ff::t_e9f25fda822ffc 165-171,581-582,609,611-615,620-629,631,633
+  s_2da0e147e997ff::t_ddbda9e85c5b33 610
+README.md
+  s_2da0e147e997ff::t_e9f25fda822ffc 137-139,187-188
+python_service/main.py
+  s_2da0e147e997ff::t_f02aae0e032a12 413-432
+python_service/tests/test_preferences.py
+  s_2da0e147e997ff::t_f02aae0e032a12 110-129
+  s_2da0e147e997ff::t_4386c932400305 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "00ed304dea1703d1bf1742e8836df870a8f237cc",
+  "prompts": {},
+  "humans": {
+    "h_0890608decf2a3": {
+      "author": "Ori Suchy <orisuchy@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_2da0e147e997ff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb552a46-1e1f-49ed-aa0a-cb0f1dd6669b",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Ori Suchy <orisuchy@gmail.com>"
+    }
+  }
+}

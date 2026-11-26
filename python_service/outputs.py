@@ -164,12 +164,13 @@ def read_matches(data_dir: str) -> list[dict]:
 
 
 def update_job(data_dir: str, job_id: str, changes: dict) -> bool:
-    """Set the user's note/hidden flag on a job. Empty values are dropped. False if no such job."""
+    """Set the user's fields on a job (note, hidden, starred, status). None/"" clears a field; hidden=False is
+    kept, so an unhidden job can be told apart from one never touched. False if no such job."""
     if not any(j["id"] == job_id for j in read_matches(data_dir)):
         return False
     with _lock:
         state = _state(data_dir)
-        entry = {k: v for k, v in {**state.get(job_id, {}), **changes}.items() if v}
+        entry = {k: v for k, v in {**state.get(job_id, {}), **changes}.items() if v or (k == "hidden" and v is False)}
         if entry:
             state[job_id] = entry
         else:

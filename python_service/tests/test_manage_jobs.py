@@ -22,7 +22,7 @@ def test_note_and_hide_are_stored_and_returned(monkeypatch, tmp_path):
         job = next(j for j in c.get("/api/jobs").json() if j["id"] == jid)
         assert job["note"] == "Call Dana on Sunday" and job["hidden"] is True
         assert c.get("/api/jobs", headers={"If-None-Match": etag}).status_code == 200  # a note change is new data
-        c.patch(f"/api/jobs/{jid}", json={"note": "", "hidden": False})
+        c.patch(f"/api/jobs/{jid}", json={"note": "", "hidden": None})
         job = next(j for j in c.get("/api/jobs").json() if j["id"] == jid)
         assert "note" not in job and "hidden" not in job
         assert json.loads((tmp_path / outputs.STATE_FILE).read_text()) == {}
@@ -57,3 +57,29 @@ def test_remove_with_allow_again_lets_a_repost_match(monkeypatch, tmp_path):
         assert c.delete(f"/api/jobs/{first['id']}?allow_again=true").status_code == 200
     assert outputs.record_if_new(str(tmp_path), {"text": first["text"]})  # repost is new again
     assert not outputs.record_if_new(str(tmp_path), {"text": "Java dev at Beta"})  # others untouched
+
+
+def test_star_and_status_set_clear_and_change_etag(monkeypatch, tmp_path):
+    _setup(monkeypatch, tmp_path)
+    with TestClient(main.app) as c:
+        jid = c.get("/api/jobs").json()[0]["id"]
+        etag = c.get("/api/jobs").headers["etag"]
+        assert c.patch(f"/api/jobs/{jid}", json={"starred": True, "status": "applied"}).status_code == 200
+        job = next(j for j in c.get("/api/jobs").json() if j["id"] == jid)
+        assert job["starred"] is True and job["status"] == "applied"
+        assert c.get("/api/jobs", headers={"If-None-Match": etag}).status_code == 200
+        c.patch(f"/api/jobs/{jid}", json={"status": None, "starred": False})
+        job = next(j for j in c.get("/api/jobs").json() if j["id"] == jid)
+        assert "status" not in job and "starred" not in job
+        c.patch(f"/api/jobs/{jid}", json={"status": "offer"})
+        c.patch(f"/api/jobs/{jid}", json={"status": ""})
+        assert json.loads((tmp_path / outputs.STATE_FILE).read_text()) == {}
+
+
+def test_unhide_is_remembered_and_invalid_status_rejected(monkeypatch, tmp_path):
+    _setup(monkeypatch, tmp_path)
+    with TestClient(main.app) as c:
+        jid = c.get("/api/jobs").json()[0]["id"]
+        assert c.patch(f"/api/jobs/{jid}", json={"status": "maybe"}).status_code == 422
+        c.patch(f"/api/jobs/{jid}", json={"hidden": False})
+        assert json.loads((tmp_path / outputs.STATE_FILE).read_text())[jid] == {"hidden": False}

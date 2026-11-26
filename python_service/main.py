@@ -393,11 +393,13 @@ JOB_ID = Path(pattern="^[0-9a-f]{64}$")
 class JobUpdate(BaseModel):
     note: str | None = Field(None, max_length=5000)
     hidden: bool | None = None
+    starred: bool | None = None
+    status: Literal["", "interested", "applied", "interview", "offer", "rejected"] | None = None
 
 
 @app.patch("/api/jobs/{job_id}")
 def api_update_job(body: JobUpdate, job_id: str = JOB_ID):
-    if not outputs.update_job(DATA_DIR, job_id, body.model_dump(exclude_none=True)):
+    if not outputs.update_job(DATA_DIR, job_id, body.model_dump(exclude_unset=True)):  # explicit null/"" clears
         raise HTTPException(404, "No such job")
     return {"ok": True}
 

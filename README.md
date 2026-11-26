@@ -135,6 +135,8 @@ you. Matches also appear on the **Dashboard**, newest first.
 - **Keep track of a job:** on its card, **Add note** (who to call, when you applied…; saved
   automatically), **Hide** it (find it again under *Hidden jobs*), or **Remove…** it. When removing,
   you choose whether the same posting should show up again if someone reposts it.
+- **Star a job:** click the ☆ on its card. Starred jobs stay at the top of the list.
+- **Track your application:** pick *Interested*, *Applied*, *Interview*, *Offer* or *Rejected* on a card, and use the status filter above the list to see only those.
 - **Stop Job Agent:** in the Terminal, inside the `job-agent` folder, run `docker compose stop`.
   Or simply quit Docker Desktop.
 - **Start it again:** open Docker Desktop (it starts by itself), or run `docker compose up -d`.

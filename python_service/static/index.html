@@ -56,6 +56,7 @@
   button.primary:hover:not(:disabled) { filter: brightness(1.1); background: var(--accent); }
   button:disabled { opacity: .5; cursor: not-allowed; }
   button.link { border: 0; background: none; padding: 0; color: var(--accent); text-decoration: underline; font-weight: 500; }
+  button.star { text-decoration: none; font-size: 1.4rem; line-height: 1; } .actions select { width: auto; }
   .field { display: grid; gap: .2rem; align-content: start; } .field > label { font-weight: 600; font-size: 14px; }
   .err { color: var(--bad-fg); font-size: 13px; font-weight: 600; } .err:empty { display: none; }
   .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: .8rem; }
@@ -152,6 +153,7 @@
         <select id="jmin" aria-label="Minimum score">
           <option value="0">Any score</option><option value="60">60% and up</option><option value="70">70% and up</option><option value="80">80% and up</option><option value="90">90% and up</option>
         </select>
+        <select id="jstatus" aria-label="Application status"><option value="">Any status</option><option value="none">No status</option><option value="interested">Interested</option><option value="applied">Applied</option><option value="interview">Interview</option><option value="offer">Offer</option><option value="rejected">Rejected</option></select>
         <select id="jview" aria-label="Which jobs"><option value="active">Active jobs</option><option value="hidden">Hidden jobs</option></select>
       </div>
     </div>
@@ -542,19 +544,22 @@ const rel = (iso) => {
   const s = (Date.now() - new Date(iso)) / 1000;
   return isNaN(s) ? '' : s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s / 60)}m ago` : s < 86400 ? `${Math.floor(s / 3600)}h ago` : s < 86400 * 30 ? `${Math.floor(s / 86400)}d ago` : new Date(iso).toLocaleDateString();
 };
+const STATUSES = [['', '—'], ['interested', 'Interested'], ['applied', 'Applied'], ['interview', 'Interview'], ['offer', 'Offer'], ['rejected', 'Rejected']];
 const MAX_JOBS = 200;  // ponytail: plain cap instead of paging; search narrows it
 function renderJobs() {
   const q = $('jq').value.trim().toLowerCase(), min = +$('jmin').value, hidden = $('jview').value === 'hidden';
   const nHidden = jobs.filter((j) => j.hidden).length;
   $('jview').options[1].textContent = `Hidden jobs (${nHidden})`;
-  const shown = jobs.filter((j) => !!j.hidden === hidden);
+  const st = $('jstatus').value;
+  const shown = jobs.filter((j) => !!j.hidden === hidden && (!st || (st === 'none' ? !j.status : j.status === st)))
+    .sort((a, b) => !!b.starred - !!a.starred);  // stable: starred first, newest first within each
   const hit = shown.filter((j) => (j.score ?? 0) >= min && (!q || [j.company, j.summary, j.reason, j.group, j.text, j.note].some((t) => (t || '').toLowerCase().includes(q))));
   $('jobcount').textContent = !shown.length ? '' : hit.length === shown.length ? `${shown.length} total` : `${hit.length} of ${shown.length}`;
   const cards = hit.slice(0, MAX_JOBS).map((j) => {
     const sc = j.score == null ? '' : j.score >= 80 ? ' ok' : j.score >= 60 ? ' warn' : '';
     const when = new Date(j.timestamp);
     return h('article', { className: 'card job' },
-      h('header', {}, h('span', { className: 'score' + sc, textContent: j.score == null ? '—' : j.score + '%', title: 'Match score' }), h('h3', { textContent: j.company || 'Unknown company', dir: 'auto' })),
+      h('header', {}, h('button', { type: 'button', className: 'link star', textContent: j.starred ? '★' : '☆', 'aria-pressed': String(!!j.starred), 'aria-label': 'Star this job', onclick: () => patchJob(j, { starred: !j.starred }) }), h('span', { className: 'score' + sc, textContent: j.score == null ? '—' : j.score + '%', title: 'Match score' }), h('h3', { textContent: j.company || 'Unknown company', dir: 'auto' })),
       h('p', { className: 'muted' }, h('time', { dateTime: j.timestamp || '', textContent: rel(j.timestamp), title: isNaN(when) ? '' : when.toLocaleString() }), ' · ', h('bdi', { textContent: j.group || 'no group' })),
       (() => { const w = [j.location && j.location !== 'Unknown' && j.location, j.work_mode && j.work_mode !== 'unknown' && j.work_mode, j.distance_km != null && `${j.distance_km} km from home`].filter(Boolean);
         return w.length ? h('p', { className: 'muted', dir: 'auto', textContent: '📍 ' + w.join(' · ') }) : null; })(),
@@ -564,6 +569,8 @@ function renderJobs() {
       j.text && h('details', {}, h('summary', { textContent: 'Original posting' }), h('pre', { textContent: j.text, dir: 'auto' })),
       noteBox(j),
       h('div', { className: 'row actions' },
+        h('select', { 'aria-label': 'Application status', onchange: (e) => patchJob(j, { status: e.target.value }, 'Status saved.') },
+          ...STATUSES.map(([v, l]) => h('option', { value: v, textContent: l, selected: (j.status || '') === v }))),
         !j.note && h('button', { type: 'button', textContent: 'Add note', onclick: (e) => { const b = noteBoxes.get(j.id); b.hidden = false; b.querySelector('textarea').focus(); e.target.remove(); } }),
         h('button', { type: 'button', textContent: j.hidden ? 'Unhide' : 'Hide', onclick: () => patchJob(j, { hidden: !j.hidden }, j.hidden ? 'Moved back to active jobs.' : 'Hidden. Find it under "Hidden jobs".') }),
         h('button', { type: 'button', className: 'rm', textContent: 'Remove…', onclick: () => askRemove(j) })));
@@ -585,7 +592,7 @@ async function patchJob(j, change, msg) {
     await api('/api/jobs/' + j.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(change) });
     for (const x of jobs) if (x.id === j.id) Object.assign(x, change);  // by id: a poll may have swapped in fresh objects meanwhile
     if (msg) toast(msg);
-    if ('hidden' in change) renderJobs();
+    if ('hidden' in change || 'starred' in change || 'status' in change) renderJobs();
   } catch (e) { toast('Could not save: ' + e.message, 'bad'); }
 }
 let rmJob = null;
@@ -603,7 +610,7 @@ $('rmdlg').onclose = async () => {
     toast($('rmagain').checked ? 'Removed. It will show up again if it is reposted.' : 'Removed. Reposts of it will be ignored.');
   } catch (e) { toast('Could not remove: ' + e.message, 'bad'); }
 };
-$('jq').oninput = $('jmin').onchange = $('jview').onchange = renderJobs;
+$('jq').oninput = $('jmin').onchange = $('jview').onchange = $('jstatus').onchange = renderJobs;
 
 // --- Profile ----------------------------------------------------------------------
 const MODES = { both: 'CV + job description', cv: 'CV only', jd: 'job description only', none: 'nothing yet' };

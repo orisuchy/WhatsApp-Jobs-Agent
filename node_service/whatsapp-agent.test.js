@@ -29,6 +29,27 @@ test('containsJobKeywords returns false when no keyword is present', () => {
   assert.equal(containsJobKeywords('שיחת חולין רגילה'), false);
 });
 
+test('containsJobKeywords catches general English postings in any field', () => {
+  for (const text of [
+    "We're hiring a nurse for night shifts",
+    'Open position: accountant, Tel Aviv',
+    'Looking for a graphic designer, part-time',
+    'Send your resume to jobs@example.com',
+    'Junior QA wanted, 2+ years',
+    'Recruiting a sales manager, apply here',
+    'מנהל/ת חשבונות לחברה בצפון',
+  ]) assert.equal(containsJobKeywords(text), true, text);
+});
+
+test('containsJobKeywords ignores everyday chatter and words inside other words', () => {
+  for (const text of [
+    'Good morning everyone!',
+    'Thanks for sharing the photos',
+    'Remote control for sale',     // "role" inside "control" must not match
+    'See you at the meetup tonight',
+  ]) assert.equal(containsJobKeywords(text), false, text);
+});
+
 const axios = require('axios');
 const {
   handleIncomingMessage,

@@ -2,34 +2,37 @@
 
 const { log_info, log_error, getTimestamp } = require('./logger');
 
+// Cheap pre-filter: a message must look like a job posting in any profession before the LLM sees it.
+// Keep it general (no job titles or fields) and lean towards letting a posting through: a false positive
+// costs one LLM call, a false negative loses a job.
 const JOB_KEYWORDS = [
-  // --- Regular expressions (Regex) for flexible patterns ---
-  /דרוש[./\\]ה/i,         // Matches: דרוש/ה, דרוש.ה, דרוש\ה
-  /מפתח[./\\]ת/i,        // Matches: מפתח/ת, מפתח.ת
-  /hiring/i,            // Matches: hiring, we're hiring, we are hiring
-  /looking for/i,       // Matches: looking for, looking for a...
-  /open (position|role|vacancy)/i, // Matches: open position, open role, open vacancy
-
-  // --- Hebrew words (searching & hiring) ---
+  // --- Hebrew (substrings: 'דרוש' also covers דרושה/דרושים/דרושות, 'מגייס' covers מגייסים/מגייסת, ...) ---
   'דרוש',
-  'דרושים',
-  'משרה',
-  'משרת',
-  'גיוס',
-  'מגייס',
-  'מגייסים',
-  'מגייסת',
+  'משרה', 'משרת', 'משרות',
+  'גיוס', 'מגייס',
   'מחפש',
-  'מחפשת',
-  'מחפשים',
-  'מחפשות',
+  'תפקיד',
+  'קורות חיים', 'קו"ח', 'קו״ח',
+  'הגשת מועמדות', 'מועמד',
+  'שנות ניסיון',
+  'היקף משרה', 'חצי משרה',
+  'הצטרף', // הצטרפו לצוות / להצטרף
+  /[א-ת][./\\][הת](?![א-ת])/,  // gendered job titles: מפתח/ת, מנהל.ת, דרוש\ה (\b doesn't work on Hebrew in JS)
 
-
-  // --- English words (lowercase - the function will normalize them) ---
-  'cv',
-  'software engineer',
-  'developer',
-  'seeking'
+  // --- English (word boundaries, so "role" doesn't match "control") ---
+  /\b(we('re| are)\s+)?hiring\b/i,
+  /\brecruit(ing|er|ers|ment)?\b/i,
+  /\b(job|jobs|position|positions|role|roles|vacanc(y|ies)|opening|openings|career|careers|internship)\b/i,
+  /\blooking for\b/i,
+  /\bseeking\b/i,
+  /\bwanted\b/i,
+  /\bjoin (our|the|my) team\b/i,
+  /\b(cv|resume|résumé)\b/i,
+  /\bapply\b|\bapplications?\b/i,
+  /\b(full|part)[- ]time\b/i,
+  /\b(junior|senior|entry[- ]level|mid[- ]level|intern)\b/i,
+  /\byears? of experience\b|\b\d+\+?\s*years?\b/i,
+  /\b(salary|requirements|qualifications|responsibilities)\b/i,
 ];
 
 
